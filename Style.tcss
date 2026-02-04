@@ -1,0 +1,38 @@
+Screen {
+    background: rgb(175, 166, 166);
+    color: white;
+    align: center middle;
+}
+
+Select { 
+    width: 20%;
+}
+
+#bot {
+    background: black 30%;
+}
+
+#bot .user {
+    text-align: right;
+    margin-bottom: 1;
+    border: 5% black;
+}
+
+#bot Static {
+    margin-left: 2;
+    margin-bottom: 1;
+    border: 5% black;
+}
+
+#hg_bot {
+    height: 90%;
+    margin: 2;
+}
+
+#hg_user {
+    height: 15%;
+    dock: bottom;
+    margin: 2;
+    width: 99%;
+   
+}
