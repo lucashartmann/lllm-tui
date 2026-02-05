@@ -1,0 +1,41 @@
+name: Build and Release ollama-tui
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install textual
+          pip install ollama
+          pip install pyinstaller
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onedir `
+              --add-data "Style.tcss;." `
+              --hidden-import textual.widgets._tab_pane `
+              --hidden-import=rich._unicode_data --collect-all=rich `
+              --name ollama-tui `
+              Main.py
+
+      - name: Fazer upload do artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: ollama-tui
+          path: dist/ollama-tui/*

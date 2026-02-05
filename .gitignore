@@ -1,3 +1,6 @@
 .venv
 __pycache__
 teste.py
+*.spec
+build/
+dist/
