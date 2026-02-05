@@ -2,7 +2,6 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog
 import io
-from enum import Enum
 import base64
 
 arquivos = [

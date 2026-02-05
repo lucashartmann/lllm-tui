@@ -1,27 +1,52 @@
 Screen {
-    background: rgb(175, 166, 166);
+    background: rgb(214, 214, 214);
     color: white;
     align: center middle;
 }
 
+
 Select { 
     width: 20%;
+    margin: 1;
+}
+
+
+#hg_editar_arquivos {
+    content-align: center middle;
+    margin-left: 2;
+}
+
+#hg_editar_arquivos Static{
+    color: black;
+    margin-bottom: 1;
+}
+
+
+
+Button {
+    min-height: 0;
+    height: 50%;
+    margin-bottom: 1;
 }
 
 #bot {
-    background: black 30%;
+    background: black 25%;
+    margin: 2;
 }
 
 #bot .user {
     text-align: right;
     margin-bottom: 1;
     border: 5% black;
+    margin: 0 2 1 2;
+    color: black;
 }
 
 #bot Static {
-    margin-left: 2;
-    margin-bottom: 1;
+    margin: 0 2 1 2;
     border: 5% black;
+    width: 100%;
+    color: black;
 }
 
 #hg_bot {
@@ -33,6 +58,11 @@ Select {
     height: 15%;
     dock: bottom;
     margin: 2;
-    width: 99%;
-   
+    width: 100%;
+    content-align: center middle;
+}
+
+VerticalGroup {
+    height: 100%;
+    width: 8%;
 }
