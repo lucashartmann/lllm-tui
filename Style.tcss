@@ -10,6 +10,28 @@ Select {
     margin: 1;
 }
 
+#hg_arquivos {
+    width: 100%;
+    background: black 80%;
+    height: auto;
+}
+
+#hg_arquivos {
+    width: 100%;
+    background: black 50%;
+    height: auto;
+    margin: 2 2 0 2;
+}
+
+#hg_arquivos Static {
+    width: auto;
+    height: auto;
+    border: 10% black;
+}
+
+#hg_arquivos Static:hover {
+    background: red 20%;
+}
 
 #hg_editar_arquivos {
     content-align: center middle;
