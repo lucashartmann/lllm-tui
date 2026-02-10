@@ -22,9 +22,9 @@ class App(App):
         yield HorizontalGroup(id="hg_arquivos")
         with HorizontalGroup(id="hg_user"):
             yield TextArea(id="user")
-            with VerticalGroup():
-                yield Button("Enviar", id="enviar")
-                yield Button("📎", id="anexo")
+            with VerticalGroup(id="vg_botoes"):
+                yield Button("Enviar", id="enviar", flat=True)
+                yield Button("📎", id="anexo", flat=True)
             with VerticalGroup(id="hg_editar_arquivos"):
                 yield Static("Editar Arquivo:")
                 with Center():

@@ -4,6 +4,19 @@ Screen {
     align: center middle;
 }
 
+#vg_botoes {
+    background: green; 
+}
+
+#vg_botoes Button{
+    margin: 0;  
+    height: 60%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    border: none;   
+}
+
 
 Select { 
     width: 20%;
@@ -12,15 +25,9 @@ Select {
 
 #hg_arquivos {
     width: 100%;
-    background: black 80%;
-    height: auto;
-}
-
-#hg_arquivos {
-    width: 100%;
     background: black 50%;
     height: auto;
-    margin: 2 2 0 2;
+    margin: 1 1 0 1;
 }
 
 #hg_arquivos Static {
@@ -40,14 +47,6 @@ Select {
 
 #hg_editar_arquivos Static{
     color: black;
-    margin-bottom: 1;
-}
-
-
-
-Button {
-    min-height: 0;
-    height: 50%;
     margin-bottom: 1;
 }
 
@@ -77,9 +76,9 @@ Button {
 }
 
 #hg_user {
-    height: 15%;
+    height: 20%;
     dock: bottom;
-    margin: 2;
+    margin: 1;
     width: 100%;
     content-align: center middle;
 }
