@@ -23,7 +23,9 @@ jobs:
         run: |
           pip install textual
           pip install ollama
+          pip install docling
           pip install pyinstaller
+          pip install textual-colorpicker
 
       - name: Build executable with PyInstaller
         run: |
