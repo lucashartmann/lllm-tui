@@ -4,6 +4,10 @@ Screen {
     align: center middle;
 }
 
+Footer {
+    background: black;
+}
+
 #vg_botoes {
     background: green; 
 }
@@ -27,7 +31,8 @@ Select {
     width: 100%;
     background: black 50%;
     height: auto;
-    margin: 1 1 0 1;
+    margin: 1 2 0 2;
+    overflow: auto auto;
 }
 
 #hg_arquivos Static {

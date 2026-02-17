@@ -1,5 +1,5 @@
 from textual.app import App
-from textual.widgets import TextArea, Select, Button, Static, Switch
+from textual.widgets import TextArea, Select, Button, Static, Switch, Footer
 from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center
 from textual.events import Click
 from textual.binding import Binding
@@ -12,14 +12,20 @@ class App(App):
     CSS_PATH = "Style.tcss"
 
     modelo = Modelo()
-    caminhos = None
+    caminhos = list()
 
     base = "Responda usando o idioma da mensagem a seguir:\n"
 
     BINDINGS = [
         Binding("ctrl+q", "sair", "sair"),
-        Binding("ctrl+c", "sair", "sair")
+        Binding("ctrl+c", "sair", "sair"),
+        Binding("ctrl+z", "parar", "parar modelo")
     ]
+    
+    def action_parar(self):
+        self.notify("Parar modelo")
+        if self.modelo.modelo:
+            self.modelo.unload_model()
 
     def action_sair(self):
         self.notify("Saindo...")
@@ -40,6 +46,7 @@ class App(App):
                 yield Static("Editar Arquivo:")
                 with Center():
                     yield Switch()
+        yield Footer(show_command_palette=False)
 
     async def processamento(self, prompt_inicial) -> None:
         resposta = None
@@ -227,14 +234,18 @@ class App(App):
             self.notify("Selecione um modelo!")
 
         elif evento.button.id == "anexo":
-            self.caminhos = Midia.selecionar_arquivo()
+            lista1 = Midia.selecionar_arquivo()
+            lista2 = self.caminhos
+            self.caminhos = list(set(lista2 + lista1))
 
             if self.caminhos:
+                nomes = list(str(stt.name) for stt in self.query_one("#hg_arquivos").query(Static))
                 for caminho in self.caminhos:
-                    self.query_one(
-                        "#hg_arquivos", HorizontalGroup).styles.display = "block"
-                    self.query_one("#hg_arquivos", HorizontalGroup).mount(
-                        Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
+                    if caminho not in nomes:
+                        self.query_one(
+                            "#hg_arquivos", HorizontalGroup).styles.display = "block"
+                        self.query_one("#hg_arquivos", HorizontalGroup).mount(
+                            Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
 
     def on_click(self, evento: Click):
         if evento.widget.parent.id == "hg_arquivos":
