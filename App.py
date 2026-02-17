@@ -1,11 +1,11 @@
+from textual import events
 from textual.app import App
-from textual.widgets import TextArea, Select, Button, Static, Switch, Footer
-from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center
-from textual.events import Click
+from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input
+from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center, Horizontal
 from textual.binding import Binding
 import Midia
 from Modelo import Modelo
-
+from textual_colorpicker import ColorPicker
 
 class App(App):
 
@@ -13,19 +13,46 @@ class App(App):
 
     modelo = Modelo()
     caminhos = list()
-
-    base = "Responda usando o idioma da mensagem a seguir:\n"
+    nome_bot = "bot"
+    nome_user = None
+    cor_bor = "yellow"
+    config = f'''
+    Config:
+    - seu nome: {nome_bot}
+    - nome do user: {nome_user}
+    Responda usando o idioma da mensagem a seguir:\n
+    '''
 
     BINDINGS = [
         Binding("ctrl+q", "sair", "sair"),
         Binding("ctrl+c", "sair", "sair"),
         Binding("ctrl+z", "parar", "parar modelo")
     ]
-    
+
+    WIDTH_BREAKPOINS = {
+        34: "tamanho-34",
+        64: "tamanho-64",
+        98: "tamanho-98",
+        128: "tamanho-128",
+        192: "tamanho-192",
+    }
+
+    def on_resize(self, event: events.Resize) -> None:
+        for cls in self.WIDTH_BREAKPOINS.values():
+            self.remove_class(cls)
+
+        # print(f"width do terminal: {event.size.width}")
+
+        for w in sorted(self.WIDTH_BREAKPOINS, reverse=True):
+            if event.size.width > w:
+                self.add_class(self.WIDTH_BREAKPOINS[w])
+                break
+
     def action_parar(self):
-        self.notify("Parar modelo")
         if self.modelo.modelo:
-            self.modelo.unload_model()
+            stop = self.modelo.unload_model()
+            if stop:
+                self.notify("Modelo parado com sucesso")
 
     def action_sair(self):
         self.notify("Saindo...")
@@ -34,7 +61,11 @@ class App(App):
         self.exit()
 
     def compose(self):
-        yield Select((modelo, modelo) for modelo in self.modelo.listar_nome_modelos())
+        with Horizontal(id="h_top"):
+            yield Select((modelo, modelo) for modelo in self.modelo.listar_nome_modelos())
+            yield Input(placeholder="nome do bot", value="bot", id="input_nome_bot")
+            yield Input(placeholder="seu nome")
+            yield ColorPicker()
         yield VerticalScroll(id="bot")
         yield HorizontalGroup(id="hg_arquivos")
         with HorizontalGroup(id="hg_user"):
@@ -47,10 +78,26 @@ class App(App):
                 with Center():
                     yield Switch()
         yield Footer(show_command_palette=False)
+        
+    def on_color_picker_changed(self, evento: ColorPicker.Changed):
+        self.cor_bor = evento.color_picker.color
+
+    def on_input_changed(self, evento: Input.Changed):
+        if evento.input.id == "input_nome_bot":
+            self.nome_bot = evento.input.value
+        else:
+            self.nome_user = evento.input.value
+            
+        self.config = f'''
+            Config:
+            - seu nome: {self.nome_bot}
+            - nome do user: {self.nome_user}
+            Responda usando o idioma da mensagem a seguir:\n
+            '''
 
     async def processamento(self, prompt_inicial) -> None:
         resposta = None
-        mensagem = self.base + prompt_inicial
+        mensagem = self.config + prompt_inicial
 
         if self.caminhos:
             print(self.caminhos)
@@ -84,6 +131,10 @@ class App(App):
                                 - Não escreva texto fora do diff
                                 - IMPORTANTE!: Ignore linha (como linha 1.) por exemplo, só está no código para te dizer em qual linha o código está no arquivo
                                 - Responda usando o idioma que esta sendo usando na 'Tarefa:'
+                                
+                                Config:
+                                - seu nome: {self.nome_bot}
+                                - nome do user: {self.nome_user}
                                 
                                 '''
 
@@ -124,11 +175,11 @@ class App(App):
                                             widget = bot_container.query_one(
                                                 ".stt_pensando", Static)
                                             widget.update(
-                                                f"[yellow]bot[/]: {resposta}")
+                                                f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                                         except:
                                             bot_container.mount(
                                                 Static(
-                                                    f"[yellow]bot[/]: {resposta}")
+                                                    f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                                             )
                                         bot_container.scroll_end(animate=False)
                                     self.call_from_thread(update_ui)
@@ -156,11 +207,11 @@ class App(App):
                                         widget = bot_container.query_one(
                                             ".stt_pensando", Static)
                                         widget.update(
-                                            f"[yellow]bot[/]: {resposta}")
+                                            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                                     except:
                                         bot_container.mount(
                                             Static(
-                                                f"[yellow]bot[/]: {resposta}")
+                                                f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                                         )
                                     bot_container.scroll_end(animate=False)
                                 self.call_from_thread(update_ui)
@@ -183,11 +234,11 @@ class App(App):
                 try:
                     widget = bot_container.query_one(".stt_pensando", Static)
                     widget.remove_class("stt_pensando")
-                    widget.update(f"[yellow]bot[/]: {resposta}")
+                    widget.update(f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                 except:
                     bot_container.mount(
                         Static(
-                            f"[yellow]bot[/]: {resposta}")
+                            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
                     )
                 bot_container.scroll_end(animate=False)
             self.call_from_thread(update_ui)
@@ -207,7 +258,7 @@ class App(App):
         if not self.loading:
             return
         widget.update(
-            f"[yellow]bot[/]: {frames[self._frame_index % len(frames)]}")
+            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
         self._frame_index += 1
 
     async def on_button_pressed(self, evento: Button.Pressed):
@@ -239,7 +290,8 @@ class App(App):
             self.caminhos = list(set(lista2 + lista1))
 
             if self.caminhos:
-                nomes = list(str(stt.name) for stt in self.query_one("#hg_arquivos").query(Static))
+                nomes = list(str(stt.name)
+                             for stt in self.query_one("#hg_arquivos").query(Static))
                 for caminho in self.caminhos:
                     if caminho not in nomes:
                         self.query_one(
@@ -247,7 +299,7 @@ class App(App):
                         self.query_one("#hg_arquivos", HorizontalGroup).mount(
                             Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
 
-    def on_click(self, evento: Click):
+    def on_click(self, evento: events.Click):
         if evento.widget.parent.id == "hg_arquivos":
             caminho = evento.widget.name
             self.caminhos.remove(caminho)
