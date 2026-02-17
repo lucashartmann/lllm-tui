@@ -1,16 +1,11 @@
-from ollama import chat
-from ollama import ChatResponse
-from ollama import ListResponse
 import ollama
-
-ollama.generate
 
 
 class Modelo:
 
     def __init__(self):
         self.modelo = ""
-    
+
     def set_modelo(self, modelo):
         self.modelo = modelo
 
@@ -20,6 +15,18 @@ class Modelo:
             return True
         except Exception as e:
             print(f"ERRO! Modelo.deletar {e}")
+            return False
+
+    def unload_model(self):
+        try:
+            ollama.generate(
+                model=self.modelo,
+                prompt="",
+                keep_alive=0
+            )
+            return True
+        except  Exception as e:
+            print(e)
             return False
 
     def pull(self, modelo):
