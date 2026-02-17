@@ -9,7 +9,7 @@ Footer {
 }
 
 #vg_botoes {
-    background: green; 
+    border: none;
 }
 
 #vg_botoes Button{
@@ -18,20 +18,19 @@ Footer {
     width: 100%;
     min-width: 0;
     min-height: 0;
-    border: none;   
+    border: tall 10% black;   
 }
-
 
 Select { 
-    width: 20%;
-    margin: 1;
+    width: 22%;
 }
+
 
 #hg_arquivos {
     width: 100%;
     background: black 50%;
     height: auto;
-    margin: 1 2 0 2;
+    margin: 0 2 1 2;
     overflow: auto auto;
 }
 
@@ -58,6 +57,7 @@ Select {
 #bot {
     background: black 25%;
     margin: 2;
+    border:  tall 40% black;
 }
 
 #bot .user {
@@ -83,12 +83,109 @@ Select {
 #hg_user {
     height: 20%;
     dock: bottom;
-    margin: 1;
+    margin: 0 2 2 2;
     width: 100%;
     content-align: center middle;
+    # border:  tall 10% black;
 }
 
 VerticalGroup {
     height: 100%;
     width: 8%;
+}
+
+#h_top {
+    margin: 1 2 0 2;
+    height: auto;
+}
+
+#h_top Input{
+  width: auto;
+  min-width: 20%;
+}
+
+ColorPicker {
+    height: 100%;
+    width: 38%;
+    layout: horizontal;
+
+    VerticalGroup:first-child {
+        width: 100%;
+        height: 100%;
+        layout: horizontal;
+        overflow: auto auto;
+    }
+
+    SaturationValuePicker {
+        width: 50%;
+    }
+
+    HuePicker {
+        width: 50%;
+        margin: 1 0 0 1;
+    }
+
+    ColorPreview {
+        display: none;
+    }
+
+    ColorInputs {
+        display: none;
+    }
+
+}
+
+
+App.tamanho-34 {
+    #user {
+        width: 50%;
+    }
+    #hg_editar_arquivos {
+        width: 28%;
+    }
+    #vg_botoes {
+        width: 24%;
+    }
+    Select {
+        width: 70%;
+    }
+    Footer {
+        background: green;
+    }
+}
+
+App.tamanho-64 {
+    #user {
+        width: 67%;
+    }
+    #hg_editar_arquivos {
+        width: 14%;
+    }
+    #vg_botoes {
+        width: 17%;
+    }
+    Select {
+        width: 35%;
+    }
+    Footer {
+        background: purple;
+    }
+}
+
+App.tamanho-98 {
+    #user {
+        width: 72%;
+    }
+    #hg_editar_arquivos {
+        width: 14%;
+    }
+    #vg_botoes {
+        width: 15%;
+    }
+    Select {
+        width: 30%;
+    }
+    Footer {
+        background: orange;
+    }
 }
