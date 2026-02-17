@@ -1,0 +1,4 @@
+textual
+textual-colorpicker
+ollama
+docling
