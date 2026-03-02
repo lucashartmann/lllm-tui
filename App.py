@@ -29,6 +29,8 @@ class App(App):
     '''
     _stream_started_at = None
     _first_token_latency = None
+    _current_response_container = None
+    _current_response_widget = None
 
     BINDINGS = [
         Binding("ctrl+q", "sair", "sair"),
@@ -66,14 +68,17 @@ class App(App):
         self.exit()
 
     def on_mount(self):
-        select = self.query_one(Select)
-        lista = list((modelo, modelo)
-                     for modelo in self.modelo.listar_nome_modelos())
-        select.set_options(lista)
+        self.run_worker(
+                    self.carregar_modelos,
+                    name="Carregando modelos do Ollama",
+                    thread=True,
+                    exclusive=True,
+        )
 
     def compose(self):
         with Horizontal(id="h_top"):
             yield Select([("asdas", "asdasdsa")])
+            yield Button("🔃", id="recarregar")
             yield Input(placeholder="nome do bot", value="bot", id="input_nome_bot")
             yield Input(placeholder="seu nome")
             yield ColorPicker()
@@ -88,7 +93,7 @@ class App(App):
                 yield Static("Editar Arquivo:")
                 with Center():
                     yield Switch()
-        yield HorizontalScroll(id="data")
+        # yield HorizontalScroll(id="data")
         yield Footer(show_command_palette=False)
 
     def on_color_picker_changed(self, evento: ColorPicker.Changed):
@@ -192,7 +197,7 @@ class App(App):
                 )
 
                 if resposta:
-                    self._update_ui_response(resposta)
+                    # self._update_ui_response(resposta)
                     self._mostrar_rodape_resposta(
                         estrategia=estrategia_resposta,
                         chunks_total=chunks_total,
@@ -221,7 +226,7 @@ class App(App):
                         on_chunk=self._update_ui_streaming,
                     )
                     if resposta:
-                        self._update_ui_response(resposta)
+                        # self._update_ui_response(resposta)
                         self._mostrar_rodape_resposta(
                             estrategia="chat",
                             chunks_total=0,
@@ -246,7 +251,7 @@ class App(App):
                 )
 
                 if resposta:
-                    self._update_ui_response(resposta)
+                    # self._update_ui_response(resposta)
                     self._mostrar_rodape_resposta(
                         estrategia="chat_imagem",
                         chunks_total=0,
@@ -270,7 +275,7 @@ class App(App):
         )
 
         if resposta:
-            self._update_ui_response(resposta)
+            # self._update_ui_response(resposta)
             self._mostrar_rodape_resposta(
                 estrategia="chat",
                 chunks_total=0,
@@ -291,31 +296,46 @@ class App(App):
             bot_container = self.query_one("#bot", VerticalScroll)
             try:
                 widget = bot_container.query_one(".stt_pensando", Static)
-                widget.update(
-                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}")
-            except:
+                widget.update(self._formatar_mensagem_bot(mensagem))
+            except Exception:
                 bot_container.mount(
-                    Static(
-                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}")
+                    Static(self._formatar_mensagem_bot(mensagem))
                 )
             bot_container.scroll_end(animate=False)
 
         self.call_from_thread(update_ui)
 
+    def _formatar_mensagem_bot(self, mensagem: str) -> str:
+        return f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}"
+
+    def _remover_widget_pensando(self, bot_container: VerticalScroll) -> None:
+        try:
+            widget = bot_container.query_one(".stt_pensando", Static)
+            widget.remove()
+        except Exception:
+            pass
+
+    def _montar_ou_atualizar_resposta_bot(self, bot_container: VerticalScroll, resposta: str) -> None:
+        texto = self._formatar_mensagem_bot(resposta)
+        container = self._current_response_container
+        widget = self._current_response_widget
+
+        if container is not None and widget is not None and widget.parent is container:
+            widget.update(texto)
+            return
+
+        novo_widget = Static(texto, classes="stt_resposta_bot")
+        novo_container = VerticalGroup(novo_widget)
+        bot_container.mount(novo_container)
+        self._current_response_container = novo_container
+        self._current_response_widget = novo_widget
+
     def _update_ui_response(self, resposta: str):
         def update_ui():
             self.loading = False
             bot_container = self.query_one("#bot", VerticalScroll)
-            try:
-                widget = bot_container.query_one(".stt_pensando", Static)
-                widget.remove_class("stt_pensando")
-                widget.update(
-                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta}")
-            except:
-                bot_container.mount(
-                    Static(
-                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta}")
-                )
+            self._remover_widget_pensando(bot_container)
+            self._montar_ou_atualizar_resposta_bot(bot_container, resposta)
             bot_container.scroll_end(animate=False)
 
         self.call_from_thread(update_ui)
@@ -326,17 +346,8 @@ class App(App):
                 self._first_token_latency = time.perf_counter() - self._stream_started_at
 
             bot_container = self.query_one("#bot", VerticalScroll)
-            try:
-                widget = bot_container.query_one(".stt_pensando", Static)
-                widget.update(
-                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta_parcial}")
-            except:
-                bot_container.mount(
-                    Static(
-                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta_parcial}",
-                        classes="stt_pensando",
-                    )
-                )
+            self._remover_widget_pensando(bot_container)
+            self._montar_ou_atualizar_resposta_bot(bot_container, resposta_parcial)
             bot_container.scroll_end(animate=False)
 
         self.call_from_thread(update_ui)
@@ -351,28 +362,31 @@ class App(App):
         eval_real = metricas_ollama.get("eval_count")
 
         partes = [
-            estrategia,
-            f"chunks:{chunks_total}/{chunks_selecionados}",
-            f"prompt est:{tokens_prompt}",
-            f"limite:{limite_modelo}",
-            f"1o token:{primeiro:.2f}s",
-            f"total:{total:.2f}s",
+            f"modo: {estrategia}",
+            f"chunks usados: {chunks_selecionados}/{chunks_total}",
+            # f"tokens no prompt (estimado): {tokens_prompt}k",
+            f"janela de contexto do modelo: {limite_modelo}",
+            # f"tempo até 1º token: {primeiro:.2f}s",
+            f"tempo: {total:.2f}s",
         ]
 
         if prompt_real is not None:
-            partes.append(f"prompt real:{prompt_real}")
+            partes.append(f"tokens prompt: {prompt_real}")
         if eval_real is not None:
-            partes.append(f"resposta real:{eval_real}")
+            partes.append(f"tokens resposta: {eval_real}")
 
         texto = " | ".join(partes)
 
         def montar():
-            bot_container = self.query_one("#data", HorizontalScroll)
+            bot_container = self.query_one("#bot")
             print(texto)
             try:
-                bot_container.query_one(Static).update(f"{texto}")
-            except:
-                bot_container.mount(Static(f"{texto}"))
+                container = self._current_response_container
+                if container is None:
+                    return
+                container.mount(Static(f"{texto}"))
+            except Exception:
+                return
         self.call_from_thread(montar)
 
     async def parar_animacao(self):
@@ -393,43 +407,62 @@ class App(App):
             f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
         self._frame_index += 1
 
+    async def carregar_modelos(self):
+        select = self.query_one(Select)
+        lista = list((modelo, modelo)
+                     for modelo in self.modelo.listar_nome_modelos())
+        select.set_options(lista)
+
     async def on_button_pressed(self, evento: Button.Pressed):
-        if self.modelo.modelo and evento.button.id == "enviar":
-            prompt_inicial = self.query_one("#user").text
+        match evento.button.id:
+            case "recarregar":
+                self.run_worker(
+                    self.carregar_modelos,
+                    name="Carregando modelos do Ollama",
+                    thread=True,
+                    exclusive=True,
+                )
+            case "enviar":
+                if self.modelo.modelo:
+                    prompt_inicial = self.query_one("#user").text
 
-            await self.query_one("#bot", VerticalScroll).mount(
-                Static(prompt_inicial, classes="user"))
+                    self._current_response_container = None
+                    self._current_response_widget = None
 
-            self.loading = True
-            self._frame_index = 0
-            self._loading_timer = self.set_interval(0.4, self.animate_loading)
+                    await self.query_one("#bot", VerticalScroll).mount(
+                        Static(prompt_inicial, classes="user"))
 
-            self.query_one("#user").text = ""
+                    self.loading = True
+                    self._frame_index = 0
+                    self._loading_timer = self.set_interval(
+                        0.4, self.animate_loading)
 
-            self.run_worker(
-                self.processamento(prompt_inicial),
-                name="AI pensando",
-                thread=True,
-                exclusive=True,
-            )
+                    self.query_one("#user").text = ""
 
-        elif evento.button.id == "enviar":
-            self.notify("Selecione um modelo!")
+                    self.run_worker(
+                        self.processamento(prompt_inicial),
+                        name="AI pensando",
+                        thread=True,
+                        exclusive=True,
+                    )
 
-        elif evento.button.id == "anexo":
-            lista1 = Midia.selecionar_arquivo()
-            lista2 = self.caminhos
-            self.caminhos = list(set(lista2 + lista1))
+            case "enviar":
+                self.notify("Selecione um modelo!")
 
-            if self.caminhos:
-                nomes = list(str(stt.name)
-                             for stt in self.query_one("#hg_arquivos").query(Static))
-                for caminho in self.caminhos:
-                    if caminho not in nomes:
-                        self.query_one(
-                            "#hg_arquivos", HorizontalGroup).styles.display = "block"
-                        self.query_one("#hg_arquivos", HorizontalGroup).mount(
-                            Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
+            case "anexo":
+                lista1 = Midia.selecionar_arquivo()
+                lista2 = self.caminhos
+                self.caminhos = list(set(lista2 + lista1))
+
+                if self.caminhos:
+                    nomes = list(str(stt.name)
+                                 for stt in self.query_one("#hg_arquivos").query(Static))
+                    for caminho in self.caminhos:
+                        if caminho not in nomes:
+                            self.query_one(
+                                "#hg_arquivos", HorizontalGroup).styles.display = "block"
+                            self.query_one("#hg_arquivos", HorizontalGroup).mount(
+                                Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
 
     def on_click(self, evento: events.Click):
         if evento.widget.parent.id == "hg_arquivos":

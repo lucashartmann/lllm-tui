@@ -205,3 +205,25 @@ App.tamanho-98 {
         # background: orange;
     }
 }
+
+#bot VerticalGroup Static{
+    border: none;
+    margin: 0 2 2 3;
+}
+
+#bot VerticalGroup .stt_resposta_bot {
+    margin: 0 2 0 2;
+    border: 5% black;
+    width: 100%;
+    color: black;
+}
+
+#bot VerticalGroup {
+    width: 100%;
+    height: auto;
+}
+
+#recarregar {
+    width: 3%;
+    min-width: 0;
+}
