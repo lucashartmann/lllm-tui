@@ -26,11 +26,11 @@ jobs:
 
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onedir ^
-            --collect-all rich ^
-            --name "Ollama TUI" ^
-            --add-data "Style.tcss;." ^
-            --additional-hooks-dir "./config/" ^
+          pyinstaller --onedir `
+            --collect-all rich `
+            --name "Ollama TUI" `
+            --add-data "Style.tcss;." `
+            --additional-hooks-dir "./config/" `
             Main.py
 
       - name: Fazer upload do artefato
