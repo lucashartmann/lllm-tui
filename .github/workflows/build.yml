@@ -21,23 +21,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install textual
-          pip install ollama
-          pip install docling
+          pip install -r src/requirements.txt --use-deprecated=legacy-resolver
           pip install pyinstaller
-          pip install textual-colorpicker
 
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onedir `
-              --add-data "Style.tcss;." `
-              --hidden-import textual.widgets._tab_pane `
-              --hidden-import=rich._unicode_data --collect-all=rich `
-              --name ollama-tui `
-              Main.py
+          pyinstaller --onedir ^
+            --collect-all rich ^
+            --name "Ollama TUI" ^
+            --add-data "Style.tcss;." ^
+            --additional-hooks-dir "./config/" ^
+            Main.py
 
       - name: Fazer upload do artefato
         uses: actions/upload-artifact@v4
         with:
-          name: ollama-tui
-          path: dist/ollama-tui/*
+          name: Ollama TUI
+          path: dist/Ollama TUI

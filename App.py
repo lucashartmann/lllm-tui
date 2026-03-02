@@ -1,27 +1,34 @@
 from textual import events
 from textual.app import App
 from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input
-from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center, Horizontal
+from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center, Horizontal, HorizontalScroll
 from textual.binding import Binding
 import Midia
+from Midia import ChunkedFileProcessor
 from Modelo import Modelo
 from textual_colorpicker import ColorPicker
+from textual.color import Color
+import time
+
 
 class App(App):
 
     CSS_PATH = "Style.tcss"
 
     modelo = Modelo()
+    file_processor = ChunkedFileProcessor()
     caminhos = list()
     nome_bot = "bot"
     nome_user = None
-    cor_bor = "yellow"
+    cor_bot = Color(0, 128, 0)
     config = f'''
     Config:
     - seu nome: {nome_bot}
     - nome do user: {nome_user}
     Responda usando o idioma da mensagem a seguir:\n
     '''
+    _stream_started_at = None
+    _first_token_latency = None
 
     BINDINGS = [
         Binding("ctrl+q", "sair", "sair"),
@@ -41,8 +48,6 @@ class App(App):
         for cls in self.WIDTH_BREAKPOINS.values():
             self.remove_class(cls)
 
-        # print(f"width do terminal: {event.size.width}")
-
         for w in sorted(self.WIDTH_BREAKPOINS, reverse=True):
             if event.size.width > w:
                 self.add_class(self.WIDTH_BREAKPOINS[w])
@@ -60,9 +65,15 @@ class App(App):
             self.modelo.unload_model()
         self.exit()
 
+    def on_mount(self):
+        select = self.query_one(Select)
+        lista = list((modelo, modelo)
+                     for modelo in self.modelo.listar_nome_modelos())
+        select.set_options(lista)
+
     def compose(self):
         with Horizontal(id="h_top"):
-            yield Select((modelo, modelo) for modelo in self.modelo.listar_nome_modelos())
+            yield Select([("asdas", "asdasdsa")])
             yield Input(placeholder="nome do bot", value="bot", id="input_nome_bot")
             yield Input(placeholder="seu nome")
             yield ColorPicker()
@@ -77,17 +88,18 @@ class App(App):
                 yield Static("Editar Arquivo:")
                 with Center():
                     yield Switch()
+        yield HorizontalScroll(id="data")
         yield Footer(show_command_palette=False)
-        
+
     def on_color_picker_changed(self, evento: ColorPicker.Changed):
-        self.cor_bor = evento.color_picker.color
+        self.cor_bot = evento.color_picker.color
 
     def on_input_changed(self, evento: Input.Changed):
         if evento.input.id == "input_nome_bot":
             self.nome_bot = evento.input.value
         else:
             self.nome_user = evento.input.value
-            
+
         self.config = f'''
             Config:
             - seu nome: {self.nome_bot}
@@ -96,152 +108,272 @@ class App(App):
             '''
 
     async def processamento(self, prompt_inicial) -> None:
-        resposta = None
-        mensagem = self.config + prompt_inicial
+        modo_edicao = self.query_one(Switch).value == True
+        estrategia_resposta = "chat"
+        tokens_prompt = 0
+        limite_modelo = self.modelo.obter_limite_contexto()
+        chunks_total = 0
+        chunks_selecionados = 0
+        inicio_total = time.perf_counter()
 
         if self.caminhos:
-            print(self.caminhos)
             imagens = []
-            codigos = dict()
+            arquivos_texto = []
+
             for caminho in self.caminhos:
-                if caminho.split(".")[-1] in ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff"]:
-                    imagens.append(Midia.encode_image(caminho))
-                elif caminho.split(".")[-1] in ["js", "py", "html", "tcss", "css"]:
-                    codigos[caminho] = Midia.get_chunks_codigo(caminho)
-                    print(Midia.get_chunks_codigo(caminho))
+                ext = caminho.split(".")[-1].lower()
+                if ext in ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff"]:
+                    try:
+                        img_encoded = Midia.encode_image(caminho)
+                        if img_encoded:
+                            imagens.append(img_encoded)
+                    except Exception as e:
+                        print(f"Erro ao codificar imagem {caminho}: {e}")
+                elif ext in ["js", "py", "html", "tcss", "css", "md", "txt", "json", "yaml", "yml", "xml", "csv"]:
+                    arquivos_texto.append(caminho)
 
-            if codigos:
-                print(codigos)
-                for arquivo, chunks in codigos.items():
-                    for chunk in chunks:
-                        if self.query_one(Switch).value == True:
-                            mensagem = f'''
-                                {arquivo}
-                                {chunk}
-                                
-                                Você é um editor de código.
-                                
-                                Tarefa:
-                                {prompt_inicial}
+            if modo_edicao and arquivos_texto:
+                max_retry_sintaxe = self.modelo.obter_max_retry_sintaxe()
+                # self._log_ui(
+                # f"Retry de sintaxe configurado: {max_retry_sintaxe}")
 
-                                Regras:
-                                - Gere APENAS um diff unificado (git diff)
-                                - Não explique nada
-                                - Não use markdown
-                                - Não escreva texto fora do diff
-                                - IMPORTANTE!: Ignore linha (como linha 1.) por exemplo, só está no código para te dizer em qual linha o código está no arquivo
-                                - Responda usando o idioma que esta sendo usando na 'Tarefa:'
-                                
-                                Config:
-                                - seu nome: {self.nome_bot}
-                                - nome do user: {self.nome_user}
-                                
-                                '''
+                for arquivo in arquivos_texto:
+                    # self._log_ui(f"Processando: {arquivo}")
 
-                            resposta_diff = ""
-                            if imagens:
-                                resposta_diff = self.modelo.enviar_mensagem(
-                                    mensagem, caminho_image="".join(imagem for imagem in imagens))
-                            else:
-                                resposta_diff = self.modelo.enviar_mensagem(
-                                    mensagem)
+                    def ia_callback(conteudo_chunk, prompt_chunk):
+                        resposta = self.modelo.enviar_mensagem_sync(
+                            prompt_chunk)
+                        return resposta if resposta else ""
 
-                            if resposta_diff:
-                                print("prompt inicial:", prompt_inicial)
-                                print("Resposta diff:", resposta_diff)
+                    success, mensagem = self.file_processor.processar_arquivo_com_prompt_v2(
+                        arquivo,
+                        prompt_inicial,
+                        ia_callback,
+                        validar_sintaxe_python=True,
+                        max_retry_sintaxe=max_retry_sintaxe,
+                    )
 
-                                caminho, _ = Midia.parse_diff(
-                                    resposta_diff)
-                                Midia.aplicar_diff_manual(
-                                    caminho, resposta_diff)
+                    if success:
+                        self._log_ui(f"{arquivo} editado com sucesso!")
+                    else:
+                        self._log_ui(f"Erro ao editar {arquivo}: {mensagem}")
+                        self.notify(f"Erro: {mensagem}")
 
-                                mensagem = f'''
-                                            Explique essa mudança que você fez na última conversa:
-                                            {resposta_diff}
-                                            
-                                            o prompt era: 
-                                            {prompt_inicial}
-                                            '''
-
-                                resposta = self.modelo.enviar_mensagem(
-                                    mensagem)
-
-                                if resposta:
-                                    def update_ui():
-                                        self.loading = False
-                                        bot_container = self.query_one(
-                                            "#bot", VerticalScroll)
-                                        try:
-                                            widget = bot_container.query_one(
-                                                ".stt_pensando", Static)
-                                            widget.update(
-                                                f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
-                                        except:
-                                            bot_container.mount(
-                                                Static(
-                                                    f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
-                                            )
-                                        bot_container.scroll_end(animate=False)
-                                    self.call_from_thread(update_ui)
-                            else:
-                                self.notify("Erro ao gerar diff")
-                        else:
-                            mensagem = f'''
-                                {arquivo}
-                                {chunk}
-                                
-                                
-                                Tarefa:
-                                {prompt_inicial}
-                                '''
-
-                            resposta = self.modelo.enviar_mensagem(
-                                mensagem)
-
-                            if resposta:
-                                def update_ui():
-                                    self.loading = False
-                                    bot_container = self.query_one(
-                                        "#bot", VerticalScroll)
-                                    try:
-                                        widget = bot_container.query_one(
-                                            ".stt_pensando", Static)
-                                        widget.update(
-                                            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
-                                    except:
-                                        bot_container.mount(
-                                            Static(
-                                                f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
-                                        )
-                                    bot_container.scroll_end(animate=False)
-                                self.call_from_thread(update_ui)
-
+                await self.parar_animacao()
                 return
 
-            elif imagens:
+            if arquivos_texto:
+                contexto_arquivos, estrategia, tokens_prompt, limite_modelo = self.modelo.montar_contexto_arquivos(
+                    caminhos=arquivos_texto,
+                    pergunta=prompt_inicial,
+                    chunk_size=800,
+                    overlap=120,
+                )
+                estrategia_resposta = estrategia
+                contexto_stats = self.modelo.ultimo_contexto_stats or {}
+                chunks_total = contexto_stats.get("chunks_total", 0)
+                chunks_selecionados = contexto_stats.get(
+                    "chunks_selecionados", 0)
+
+                print(
+                    f"Estratégia: {estrategia} | tokens estimados: {tokens_prompt} | limite modelo: {limite_modelo}")
+
+                mensagem = (
+                    f"{self.config}"
+                    f"Pergunta do usuário:\n{prompt_inicial}\n\n"
+                    f"Contexto dos arquivos:\n{contexto_arquivos}"
+                )
+                self._stream_started_at = time.perf_counter()
+                self._first_token_latency = None
+
                 resposta = self.modelo.enviar_mensagem(
-                    mensagem, caminho_image="".join(imagem for imagem in imagens))
+                    mensagem,
+                    on_chunk=self._update_ui_streaming,
+                )
 
-        else:
-            resposta = self.modelo.enviar_mensagem(mensagem)
-
-        print(resposta)
-        if resposta:
-            async def update_ui():
-                await self.parar_animacao()
-                bot_container = self.query_one(
-                    "#bot", VerticalScroll)
-                try:
-                    widget = bot_container.query_one(".stt_pensando", Static)
-                    widget.remove_class("stt_pensando")
-                    widget.update(f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
-                except:
-                    bot_container.mount(
-                        Static(
-                            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {resposta}")
+                if resposta:
+                    self._update_ui_response(resposta)
+                    self._mostrar_rodape_resposta(
+                        estrategia=estrategia_resposta,
+                        chunks_total=chunks_total,
+                        chunks_selecionados=chunks_selecionados,
+                        tokens_prompt=tokens_prompt,
+                        limite_modelo=limite_modelo,
+                        inicio_total=inicio_total,
                     )
-                bot_container.scroll_end(animate=False)
-            self.call_from_thread(update_ui)
+                else:
+                    self._log_ui("Erro ao processar contexto dos arquivos")
+
+                await self.parar_animacao()
+                return
+
+            if imagens:
+                if not self.modelo.suporta_imagem():
+                    self.notify(
+                        "Modelo selecionado não suporta imagem. As imagens foram ignoradas.")
+                    self._log_ui(
+                        "Modelo sem suporte a visão; ignorando imagens.")
+                    mensagem = self.config + prompt_inicial
+                    self._stream_started_at = time.perf_counter()
+                    self._first_token_latency = None
+                    resposta = self.modelo.enviar_mensagem(
+                        mensagem,
+                        on_chunk=self._update_ui_streaming,
+                    )
+                    if resposta:
+                        self._update_ui_response(resposta)
+                        self._mostrar_rodape_resposta(
+                            estrategia="chat",
+                            chunks_total=0,
+                            chunks_selecionados=0,
+                            tokens_prompt=self.modelo.estimar_tokens(mensagem),
+                            limite_modelo=limite_modelo,
+                            inicio_total=inicio_total,
+                        )
+                    else:
+                        self._log_ui("Erro ao enviar mensagem sem imagem")
+
+                    await self.parar_animacao()
+                    return
+
+                mensagem = self.config + prompt_inicial
+                self._stream_started_at = time.perf_counter()
+                self._first_token_latency = None
+                resposta = self.modelo.enviar_mensagem(
+                    mensagem,
+                    caminho_image=imagens,
+                    on_chunk=self._update_ui_streaming,
+                )
+
+                if resposta:
+                    self._update_ui_response(resposta)
+                    self._mostrar_rodape_resposta(
+                        estrategia="chat_imagem",
+                        chunks_total=0,
+                        chunks_selecionados=0,
+                        tokens_prompt=self.modelo.estimar_tokens(mensagem),
+                        limite_modelo=limite_modelo,
+                        inicio_total=inicio_total,
+                    )
+                else:
+                    self._log_ui("Erro ao enviar com imagens")
+
+                await self.parar_animacao()
+                return
+
+        mensagem = self.config + prompt_inicial
+        self._stream_started_at = time.perf_counter()
+        self._first_token_latency = None
+        resposta = self.modelo.enviar_mensagem(
+            mensagem,
+            on_chunk=self._update_ui_streaming,
+        )
+
+        if resposta:
+            self._update_ui_response(resposta)
+            self._mostrar_rodape_resposta(
+                estrategia="chat",
+                chunks_total=0,
+                chunks_selecionados=0,
+                tokens_prompt=self.modelo.estimar_tokens(mensagem),
+                limite_modelo=limite_modelo,
+                inicio_total=inicio_total,
+            )
+        else:
+            self._log_ui("Erro ao enviar mensagem")
+
+        await self.parar_animacao()
+
+    def _log_ui(self, mensagem: str):
+        print(mensagem)
+
+        def update_ui():
+            bot_container = self.query_one("#bot", VerticalScroll)
+            try:
+                widget = bot_container.query_one(".stt_pensando", Static)
+                widget.update(
+                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}")
+            except:
+                bot_container.mount(
+                    Static(
+                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}")
+                )
+            bot_container.scroll_end(animate=False)
+
+        self.call_from_thread(update_ui)
+
+    def _update_ui_response(self, resposta: str):
+        def update_ui():
+            self.loading = False
+            bot_container = self.query_one("#bot", VerticalScroll)
+            try:
+                widget = bot_container.query_one(".stt_pensando", Static)
+                widget.remove_class("stt_pensando")
+                widget.update(
+                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta}")
+            except:
+                bot_container.mount(
+                    Static(
+                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta}")
+                )
+            bot_container.scroll_end(animate=False)
+
+        self.call_from_thread(update_ui)
+
+    def _update_ui_streaming(self, resposta_parcial: str):
+        def update_ui():
+            if self._stream_started_at and self._first_token_latency is None and resposta_parcial:
+                self._first_token_latency = time.perf_counter() - self._stream_started_at
+
+            bot_container = self.query_one("#bot", VerticalScroll)
+            try:
+                widget = bot_container.query_one(".stt_pensando", Static)
+                widget.update(
+                    f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta_parcial}")
+            except:
+                bot_container.mount(
+                    Static(
+                        f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {resposta_parcial}",
+                        classes="stt_pensando",
+                    )
+                )
+            bot_container.scroll_end(animate=False)
+
+        self.call_from_thread(update_ui)
+
+    def _mostrar_rodape_resposta(self, estrategia: str, chunks_total: int, chunks_selecionados: int,
+                                 tokens_prompt: int, limite_modelo: int, inicio_total: float):
+        total = time.perf_counter() - inicio_total
+        primeiro = self._first_token_latency if self._first_token_latency is not None else total
+        metricas_ollama = self.modelo.ultima_metrica or {}
+
+        prompt_real = metricas_ollama.get("prompt_eval_count")
+        eval_real = metricas_ollama.get("eval_count")
+
+        partes = [
+            estrategia,
+            f"chunks:{chunks_total}/{chunks_selecionados}",
+            f"prompt est:{tokens_prompt}",
+            f"limite:{limite_modelo}",
+            f"1o token:{primeiro:.2f}s",
+            f"total:{total:.2f}s",
+        ]
+
+        if prompt_real is not None:
+            partes.append(f"prompt real:{prompt_real}")
+        if eval_real is not None:
+            partes.append(f"resposta real:{eval_real}")
+
+        texto = " | ".join(partes)
+
+        def montar():
+            bot_container = self.query_one("#data", HorizontalScroll)
+            print(texto)
+            try:
+                bot_container.query_one(Static).update(f"{texto}")
+            except:
+                bot_container.mount(Static(f"{texto}"))
+        self.call_from_thread(montar)
 
     async def parar_animacao(self):
         self.loading = False
@@ -258,7 +390,7 @@ class App(App):
         if not self.loading:
             return
         widget.update(
-            f"[{self.cor_bor.hex}]{self.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
+            f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
         self._frame_index += 1
 
     async def on_button_pressed(self, evento: Button.Pressed):
