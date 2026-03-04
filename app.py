@@ -3,9 +3,9 @@ from textual.app import App
 from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input
 from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center, Horizontal, HorizontalScroll
 from textual.binding import Binding
-import Midia
-from Midia import ChunkedFileProcessor
-from Modelo import Modelo
+import midia
+from midia import ChunkedFileProcessor
+from modelo import Modelo
 from textual_colorpicker import ColorPicker
 from textual.color import Color
 import time
@@ -13,7 +13,7 @@ import time
 
 class App(App):
 
-    CSS_PATH = "Style.tcss"
+    CSS_PATH = "style.tcss"
 
     modelo = Modelo()
     file_processor = ChunkedFileProcessor()
@@ -69,10 +69,10 @@ class App(App):
 
     def on_mount(self):
         self.run_worker(
-                    self.carregar_modelos,
-                    name="Carregando modelos do Ollama",
-                    thread=True,
-                    exclusive=True,
+            self.carregar_modelos,
+            name="Carregando modelos do Ollama",
+            thread=True,
+            exclusive=True,
         )
 
     def compose(self):
@@ -129,7 +129,7 @@ class App(App):
                 ext = caminho.split(".")[-1].lower()
                 if ext in ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff"]:
                     try:
-                        img_encoded = Midia.encode_image(caminho)
+                        img_encoded = midia.encode_image(caminho)
                         if img_encoded:
                             imagens.append(img_encoded)
                     except Exception as e:
@@ -347,7 +347,8 @@ class App(App):
 
             bot_container = self.query_one("#bot", VerticalScroll)
             self._remover_widget_pensando(bot_container)
-            self._montar_ou_atualizar_resposta_bot(bot_container, resposta_parcial)
+            self._montar_ou_atualizar_resposta_bot(
+                bot_container, resposta_parcial)
             bot_container.scroll_end(animate=False)
 
         self.call_from_thread(update_ui)

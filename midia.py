@@ -6,7 +6,7 @@ import base64
 import re
 import os
 from typing import Tuple, List, Optional
-from DiffEditor import DiffEditor, DiffValidationError, DiffApplicationError
+from diff_editor import DiffEditor, DiffValidationError, DiffApplicationError
 
 arquivos = [
     ("Code", "*.py *.js *.html *.css *.tcss *.cpp"),

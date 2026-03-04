@@ -29,9 +29,9 @@ jobs:
           pyinstaller --onedir `
             --collect-all rich `
             --name "Ollama TUI" `
-            --add-data "Style.tcss;." `
+            --add-data "style.tcss;." `
             --additional-hooks-dir "./config/" `
-            Main.py
+            main.py
 
       - name: Fazer upload do artefato
         uses: actions/upload-artifact@v4
