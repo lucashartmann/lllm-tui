@@ -1,0 +1,47 @@
+ListView {
+    margin: 5;
+    layout: grid;
+    grid-size: 3 3;
+}
+
+ListView ListItem.-highlight {
+    background: orange;
+    Container Static {
+        color: black;
+    }
+}
+
+ListView ListItem {
+    background: rgba(13, 76, 39, 0.8);
+    height: 100%;
+    width: 100%;
+    margin: 2;
+    text-align: center;
+    content-align: center middle;
+    align: center middle;
+    
+}
+
+.modelo-selecionado {
+    background: rgba(255, 165, 0, 0.8);
+}
+
+ListView ListItem:hover {
+    background: rgba(23, 126, 66, 0.8);
+}
+
+ListView ListItem Container Static{
+    color: rgb(255, 255, 255);
+    width: 100%;
+    height: 100%;
+    # background: black 20%;
+    text-align: center;
+    content-align: center middle;
+    # text-style: bold;
+}
+
+ListView ListItem Container {
+    layout: grid;
+    grid-size: 2 3;
+    grid-gutter: 1;
+}

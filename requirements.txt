@@ -2,3 +2,4 @@ textual
 textual-colorpicker
 ollama
 docling
+textual-diff-view

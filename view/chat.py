@@ -1,59 +1,96 @@
 from textual import events
-from textual.app import App
-from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input
-from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center, Horizontal, HorizontalScroll
+from textual.screen import Screen, ModalScreen
+from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input, Tab, Tabs
+from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center
 from textual.binding import Binding
-import midia
-from midia import ChunkedFileProcessor
-from modelo import Modelo
-from textual_colorpicker import ColorPicker
-from textual.color import Color
+from model import diff_editor, midia, modelo
+from model.skills import diagrama, internet
 import time
+from textual_diff_view import DiffView, LoadError
+from textual.app import App, ComposeResult
+from textual import containers
+from textual.reactive import var
+from textual import widgets
+from view.widgets.header import Header
+import os
+from pathlib import Path
+from textual.containers import Horizontal
 
+class DiffScreen(ModalScreen):
+    BINDINGS = [
+    ("space", "toggle('split')", "Toggle split"),
+        ("a", "toggle('annotations')", "Toggle annotations"),
+    ]
 
-class App(App):
+    split = var(True)
+    annotations = var(True)
 
-    CSS_PATH = "style.tcss"
+    def __init__(self, original: str, modified: str) -> None:
+        self.original = original
+        self.modified = modified
+        super().__init__()
 
-    modelo = Modelo()
-    file_processor = ChunkedFileProcessor()
-    caminhos = list()
-    nome_bot = "bot"
-    nome_user = None
-    cor_bot = Color(0, 128, 0)
-    config = f'''
-    Config:
-    - seu nome: {nome_bot}
-    - nome do user: {nome_user}
-    Responda usando o idioma da mensagem a seguir:\n
-    '''
-    _stream_started_at = None
-    _first_token_latency = None
-    _current_response_container = None
-    _current_response_widget = None
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Horizontal(id="dialog"):
+            yield containers.VerticalScroll(id="diff-container")
+            yield widgets.Footer()
+
+    async def on_mount(self) -> None:
+        try:
+            diff_view = await DiffView.load(self.original, self.modified)
+        except LoadError as error:
+            self.notify(str(error), title="Failed to load code", severity="error")
+        else:
+            diff_view.data_bind(DiffScreen.split, DiffScreen.annotations)
+            await self.query_one("#diff-container").mount(diff_view)
+    
+    
+
+class ChatScreen(Screen):
+
+    CSS_PATH = ["css/base.tcss","css/chat.tcss"]
+
+    def __init__(self, name=None, id=None, classes=None):
+        super().__init__(name, id, classes)
+
+        self.caminhos = []
+        self.file_processor = midia.ChunkedFileProcessor()
+        self.nome_bot = self.app.nome_bot
+        self.nome_user = self.app.nome_user
+        self.cor_bot = self.app.cor_bot
+        self.config = f'''
+        Config:
+        - seu nome: {self.app.nome_bot}
+        - nome do user: {self.app.nome_user}
+        Responda usando o idioma da mensagem a seguir:\n
+        '''
+        self._stream_started_at = None
+        self._first_token_latency = None
+        self._current_response_container = None
+        self._current_response_widget = None
+        self._diff_button_count = 0
+        self._diff_button_map: dict[str, tuple[str, str]] = {}
+        self.modelo = self.app.modelo
 
     BINDINGS = [
-        Binding("ctrl+q", "sair", "sair"),
-        Binding("ctrl+c", "sair", "sair"),
         Binding("ctrl+z", "parar", "parar modelo")
     ]
 
-    WIDTH_BREAKPOINS = {
-        34: "tamanho-34",
-        64: "tamanho-64",
-        98: "tamanho-98",
-        128: "tamanho-128",
-        192: "tamanho-192",
-    }
+    def on_screen_resume(self):
+        self.query_one(Tabs).active = self.query_one(
+            "#tab_chat", Tab).id
 
-    def on_resize(self, event: events.Resize) -> None:
-        for cls in self.WIDTH_BREAKPOINS.values():
-            self.remove_class(cls)
-
-        for w in sorted(self.WIDTH_BREAKPOINS, reverse=True):
-            if event.size.width > w:
-                self.add_class(self.WIDTH_BREAKPOINS[w])
-                break
+    def on_tabs_tab_activated(self, event: Tabs.TabActivated):
+        try:
+            if event.tabs.active == self.query_one("#tab_config", Tab).id:
+                self.app.switch_screen("config")
+            elif event.tabs.active == self.query_one("#tab_skills", Tab).id:
+                self.app.switch_screen("skills")
+            elif event.tabs.active == self.query_one("#tab_models", Tab).id:
+                self.app.switch_screen("models")
+        except:
+            pass
 
     def action_parar(self):
         if self.modelo.modelo:
@@ -61,27 +98,8 @@ class App(App):
             if stop:
                 self.notify("Modelo parado com sucesso")
 
-    def action_sair(self):
-        self.notify("Saindo...")
-        if self.modelo.modelo:
-            self.modelo.unload_model()
-        self.exit()
-
-    def on_mount(self):
-        self.run_worker(
-            self.carregar_modelos,
-            name="Carregando modelos do Ollama",
-            thread=True,
-            exclusive=True,
-        )
-
     def compose(self):
-        with Horizontal(id="h_top"):
-            yield Select([("asdas", "asdasdsa")])
-            yield Button("🔃", id="recarregar")
-            yield Input(placeholder="nome do bot", value="bot", id="input_nome_bot")
-            yield Input(placeholder="seu nome")
-            yield ColorPicker()
+        yield Tabs(Tab("Chat", id="tab_chat"), Tab("Configuração", id="tab_config"), Tab("Skills", id="tab_skills"), Tab("Modelos", id="tab_models"))
         yield VerticalScroll(id="bot")
         yield HorizontalGroup(id="hg_arquivos")
         with HorizontalGroup(id="hg_user"):
@@ -95,22 +113,6 @@ class App(App):
                     yield Switch()
         # yield HorizontalScroll(id="data")
         yield Footer(show_command_palette=False)
-
-    def on_color_picker_changed(self, evento: ColorPicker.Changed):
-        self.cor_bot = evento.color_picker.color
-
-    def on_input_changed(self, evento: Input.Changed):
-        if evento.input.id == "input_nome_bot":
-            self.nome_bot = evento.input.value
-        else:
-            self.nome_user = evento.input.value
-
-        self.config = f'''
-            Config:
-            - seu nome: {self.nome_bot}
-            - nome do user: {self.nome_user}
-            Responda usando o idioma da mensagem a seguir:\n
-            '''
 
     async def processamento(self, prompt_inicial) -> None:
         modo_edicao = self.query_one(Switch).value == True
@@ -126,6 +128,12 @@ class App(App):
             arquivos_texto = []
 
             for caminho in self.caminhos:
+                if os.path.isdir(caminho):
+                    for root, dirs, files in os.walk(caminho):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            self.caminhos.append(full_path)
+                    continue
                 ext = caminho.split(".")[-1].lower()
                 if ext in ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff"]:
                     try:
@@ -143,6 +151,7 @@ class App(App):
                 # f"Retry de sintaxe configurado: {max_retry_sintaxe}")
 
                 for arquivo in arquivos_texto:
+                    arquivo_editado = self._gerar_caminho_arquivo_editado(arquivo)
                     # self._log_ui(f"Processando: {arquivo}")
 
                     def ia_callback(conteudo_chunk, prompt_chunk):
@@ -156,10 +165,12 @@ class App(App):
                         ia_callback,
                         validar_sintaxe_python=True,
                         max_retry_sintaxe=max_retry_sintaxe,
+                        caminho_saida=arquivo_editado,
                     )
 
                     if success:
-                        self._log_ui(f"{arquivo} editado com sucesso!")
+                        self._log_ui(f"{arquivo} editado com sucesso! Salvo em: {arquivo_editado}")
+                        self._montar_mensagem_diff(arquivo, arquivo_editado)
                     else:
                         self._log_ui(f"Erro ao editar {arquivo}: {mensagem}")
                         self.notify(f"Erro: {mensagem}")
@@ -275,7 +286,7 @@ class App(App):
         )
 
         if resposta:
-            # self._update_ui_response(resposta)
+            self._update_ui_response(resposta)
             self._mostrar_rodape_resposta(
                 estrategia="chat",
                 chunks_total=0,
@@ -303,10 +314,41 @@ class App(App):
                 )
             bot_container.scroll_end(animate=False)
 
-        self.call_from_thread(update_ui)
+        self.app.call_from_thread(update_ui)
 
     def _formatar_mensagem_bot(self, mensagem: str) -> str:
         return f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {mensagem}"
+
+    def _gerar_caminho_arquivo_editado(self, arquivo_original: str) -> str:
+        caminho = Path(arquivo_original)
+        indice = 1
+        while True:
+            sufixo = "_editado" if indice == 1 else f"_editado_{indice}"
+            candidato = caminho.with_name(
+                f"{caminho.stem}{sufixo}{caminho.suffix}")
+            if not candidato.exists():
+                return str(candidato)
+            indice += 1
+
+    def _montar_mensagem_diff(self, arquivo_original: str, arquivo_editado: str) -> None:
+        def montar():
+            bot_container = self.query_one("#bot", VerticalScroll)
+            self._remover_widget_pensando(bot_container)
+
+            self._diff_button_count += 1
+            botao_id = f"abrir_diff_{self._diff_button_count}"
+            self._diff_button_map[botao_id] = (arquivo_original, arquivo_editado)
+
+            container = VerticalGroup(
+                Static(self._formatar_mensagem_bot(
+                    f"Clique para visualizar diff de {Path(arquivo_original).name}"), classes="stt_resposta_bot"),
+                Button("Ver alterações (diff)", id=botao_id, classes="stt_diff_bot"),
+                classes="stt_resposta_bot",
+            )
+            bot_container.mount(container)
+            bot_container.scroll_end(animate=False)
+
+        self.app.call_from_thread(montar)
 
     def _remover_widget_pensando(self, bot_container: VerticalScroll) -> None:
         try:
@@ -332,13 +374,13 @@ class App(App):
 
     def _update_ui_response(self, resposta: str):
         def update_ui():
-            self.loading = False
+            self.carregando_mensagem = False
             bot_container = self.query_one("#bot", VerticalScroll)
             self._remover_widget_pensando(bot_container)
             self._montar_ou_atualizar_resposta_bot(bot_container, resposta)
             bot_container.scroll_end(animate=False)
 
-        self.call_from_thread(update_ui)
+        self.app.call_from_thread(update_ui)
 
     def _update_ui_streaming(self, resposta_parcial: str):
         def update_ui():
@@ -351,7 +393,7 @@ class App(App):
                 bot_container, resposta_parcial)
             bot_container.scroll_end(animate=False)
 
-        self.call_from_thread(update_ui)
+        self.app.call_from_thread(update_ui)
 
     def _mostrar_rodape_resposta(self, estrategia: str, chunks_total: int, chunks_selecionados: int,
                                  tokens_prompt: int, limite_modelo: int, inicio_total: float):
@@ -388,10 +430,10 @@ class App(App):
                 container.mount(Static(f"{texto}"))
             except Exception:
                 return
-        self.call_from_thread(montar)
+        self.app.call_from_thread(montar)
 
     async def parar_animacao(self):
-        self.loading = False
+        self.carregando_mensagem = False
         self._loading_timer.stop()
 
     async def animate_loading(self):
@@ -408,21 +450,8 @@ class App(App):
             f"[{self.cor_bot.hex}]{self.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
         self._frame_index += 1
 
-    async def carregar_modelos(self):
-        select = self.query_one(Select)
-        lista = list((modelo, modelo)
-                     for modelo in self.modelo.listar_nome_modelos())
-        select.set_options(lista)
-
     async def on_button_pressed(self, evento: Button.Pressed):
         match evento.button.id:
-            case "recarregar":
-                self.run_worker(
-                    self.carregar_modelos,
-                    name="Carregando modelos do Ollama",
-                    thread=True,
-                    exclusive=True,
-                )
             case "enviar":
                 if self.modelo.modelo:
                     prompt_inicial = self.query_one("#user").text
@@ -433,7 +462,7 @@ class App(App):
                     await self.query_one("#bot", VerticalScroll).mount(
                         Static(prompt_inicial, classes="user"))
 
-                    self.loading = True
+                    self.carregando_mensagem = True
                     self._frame_index = 0
                     self._loading_timer = self.set_interval(
                         0.4, self.animate_loading)
@@ -447,11 +476,8 @@ class App(App):
                         exclusive=True,
                     )
 
-            case "enviar":
-                self.notify("Selecione um modelo!")
-
             case "anexo":
-                lista1 = Midia.selecionar_arquivo()
+                lista1 = midia.selecionar_arquivo()
                 lista2 = self.caminhos
                 self.caminhos = list(set(lista2 + lista1))
 
@@ -464,6 +490,14 @@ class App(App):
                                 "#hg_arquivos", HorizontalGroup).styles.display = "block"
                             self.query_one("#hg_arquivos", HorizontalGroup).mount(
                                 Static(f"[red]X[/] {caminho.split("/")[-1]}", name=caminho))
+            case _:
+                botao_id = evento.button.id or ""
+                if botao_id.startswith("abrir_diff_"):
+                    dados_diff = self._diff_button_map.get(botao_id)
+                    if dados_diff:
+                        arquivo_original, arquivo_editado = dados_diff
+                        self.app.push_screen(
+                            DiffScreen(arquivo_original, arquivo_editado))
 
     def on_click(self, evento: events.Click):
         if evento.widget.parent.id == "hg_arquivos":
@@ -474,8 +508,3 @@ class App(App):
             if not self.caminhos:
                 self.query_one(
                     "#hg_arquivos", HorizontalGroup).styles.display = "none"
-
-    def on_select_changed(self):
-        if self.modelo.modelo:
-            self.modelo.unload_model()
-        self.modelo.set_modelo(self.query_one(Select).value)

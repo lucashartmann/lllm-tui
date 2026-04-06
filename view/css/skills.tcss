@@ -1,0 +1,29 @@
+ListView {
+    margin: 5;
+    layout: grid;
+    grid-size: 2 1;
+    text-align: center;
+    content-align: center middle;
+    align: center middle;
+}
+
+ListView ListItem {
+    background: white 85%;
+    height: 30%;
+    width: 40%;
+    margin: 2;
+    text-align: center;
+    content-align: center middle;
+    align: center middle;
+}
+
+ListView ListItem Static{
+    text-align: center;
+    content-align: center middle;
+    align: center middle;
+    color: black;
+}
+
+Tab {
+    color: black;
+}

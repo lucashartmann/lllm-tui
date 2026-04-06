@@ -1,0 +1,27 @@
+
+Tab {
+    color: black;
+}
+
+Screen {
+    background: rgb(214, 214, 214);
+    color: white;
+    align: center middle;
+}
+
+
+Tabs Underline {
+        width: 1fr;
+        height: 1;
+        & > .underline--bar {
+            color: black;
+            background: $foreground 90%;
+        }
+        &:ansi {
+            text-style: dim;
+        }
+}
+
+Footer {
+    background: black;
+}

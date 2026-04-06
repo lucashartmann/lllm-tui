@@ -6,10 +6,11 @@ import base64
 import re
 import os
 from typing import Tuple, List, Optional
-from diff_editor import DiffEditor, DiffValidationError, DiffApplicationError
+from model.diff_editor import DiffEditor, DiffValidationError, DiffApplicationError
 
 arquivos = [
     ("Code", "*.py *.js *.html *.css *.tcss *.cpp"),
+    ("Pastas", ""),
     ("Imagens", "*.png *.jpg *.jpeg *.gif *.bmp *.webp *.tiff"),
     ("Documentos", "*.pdf *.txt *.doc *.docx *.xls *.xlsx *.ppt *.pptx *.odt *.ods *.odp")
 ]
@@ -468,7 +469,8 @@ class ChunkedFileProcessor:
 
     def processar_arquivo_com_prompt_v2(self, caminho_arquivo: str, prompt_inicial: str,
                                         callback_ia=None, validar_sintaxe_python: bool = True,
-                                        max_retry_sintaxe: int = 1) -> Tuple[bool, str]:
+                                        max_retry_sintaxe: int = 1,
+                                        caminho_saida: Optional[str] = None) -> Tuple[bool, str]:
 
         if not callback_ia:
             return False, "callback_ia é obrigatório"
@@ -483,6 +485,16 @@ class ChunkedFileProcessor:
 
         with open(caminho_arquivo, "r", encoding="utf-8") as f:
             conteudo_original = f.read()
+
+        caminho_destino = caminho_saida or caminho_arquivo
+
+        if caminho_saida:
+            try:
+                Path(caminho_destino).parent.mkdir(parents=True, exist_ok=True)
+                with open(caminho_destino, "w", encoding="utf-8") as f:
+                    f.write(conteudo_original)
+            except Exception as e:
+                return False, f"Erro ao preparar arquivo de saída {caminho_destino}: {e}"
 
         caminho_relativo = caminho_arquivo.replace("\\", "/")
 
@@ -576,35 +588,35 @@ SUA RESPOSTA:"""
         print(f"Primeiras 200 chars do diff: {diff[:200]}")
 
         is_valid, validation_msg = self.diff_editor.validate_diff(
-            diff, caminho_arquivo)
+            diff, caminho_destino)
 
         if not is_valid:
             print(f"Diff gerado é inválido: {validation_msg}")
             print(f"Tentando fallback direto...")
 
             try:
-                with open(caminho_arquivo, "w", encoding="utf-8") as f:
+                with open(caminho_destino, "w", encoding="utf-8") as f:
                     f.write('\n'.join(linhas_novas))
                 print("Arquivo atualizado diretamente (fallback)")
-                return True, "Arquivo editado com sucesso (fallback)"
+                return True, f"Arquivo editado com sucesso (fallback): {caminho_destino}"
             except Exception as e:
                 return False, f"Falhou diff e fallback: {e}"
 
         print(f"Aplicando diff...")
         try:
             success, apply_msg = self.diff_editor.apply_diff(
-                caminho_arquivo, diff)
+                caminho_destino, diff)
             print(f"Diff aplicado com sucesso: {apply_msg}")
-            return True, "Arquivo editado com sucesso"
+            return True, f"Arquivo editado com sucesso: {caminho_destino}"
         except Exception as e:
             # Ultimate fallback
             print(f"Erro ao aplicar diff: {e}")
             print(f"Tentando escrever diretamente...")
             try:
-                with open(caminho_arquivo, "w", encoding="utf-8") as f:
+                with open(caminho_destino, "w", encoding="utf-8") as f:
                     f.write('\n'.join(linhas_novas))
                 print("Arquivo atualizado diretamente (ultimate fallback)")
-                return True, "Arquivo editado com sucesso (fallback)"
+                return True, f"Arquivo editado com sucesso (fallback): {caminho_destino}"
             except Exception as e2:
                 return False, f"Erro ao aplicar diff e fallback: {e2}"
 
@@ -671,284 +683,7 @@ SUA RESPOSTA:"""
 
         return diff
 
-    def processar_arquivo_com_prompt(self, caminho_arquivo: str, prompt_inicial: str,
-                                     callback_ia=None) -> Tuple[bool, str]:
-
-        if not callback_ia:
-            return False, "callback_ia é obrigatório"
-
-        if not os.path.exists(caminho_arquivo):
-            return False, f"Arquivo não existe: {caminho_arquivo}"
-
-        print(f"\n{'='*70}")
-        print(f"Iniciando processamento de: {caminho_arquivo}")
-        print(f"Prompt: {prompt_inicial}")
-        print(f"{'='*70}\n")
-
-        chunks = self.divide_arquivo_em_chunks(caminho_arquivo)
-
-        if not chunks:
-            return False, "Não foi possível dividir arquivo em chunks"
-
-        total_chunks = len(chunks)
-
-        for chunk_dados in chunks:
-            chunk_num = chunk_dados['numero']
-            conteudo_chunk = chunk_dados['conteudo']
-            linhas_info = chunk_dados['linhas_info']
-
-            print(
-                f"\n--- Processando CHUNK {chunk_num}/{total_chunks} (linhas {linhas_info[0]}-{linhas_info[1]}) ---\n")
-
-            caminho_relativo = caminho_arquivo.replace("\\", "/")
-
-            prompt_lower = prompt_inicial.lower()
-            eh_remover = "remov" in prompt_lower and (
-                "coment" in prompt_lower or "comentário" in prompt_lower)
-            eh_adicionar = "adic" in prompt_lower or "cri" in prompt_lower or "impl" in prompt_lower or "adicione" in prompt_lower or "adicionar" in prompt_lower
-
-            if eh_remover:
-
-                linhas_com_coment = [
-                    l for l in conteudo_chunk.split('\n') if '#' in l][:5]
-                exemplos_reais = "\n".join(
-                    linhas_com_coment) if linhas_com_coment else conteudo_chunk.split('\n')[:5]
-
-                linhas_totais = len(conteudo_chunk.split('\n'))
-
-                instrucoes_especificas = f"""TAREFA ESPECÍFICA: Removendo comentários
-
-Seu trabalho é REMOVER comentários de {caminho_relativo}.
-
-CONTEÚDO REAL DO ARQUIVO (arquivo tem {linhas_totais} linhas):
-{exemplos_reais}
-
-REGRAS ABSOLUTAS:
-1. O hunk @@ DEVE ter a contagem CORRETA de linhas
-2. Se remove 3 linhas de 5, o hunk é: @@ -1,5 +1,2 @@
-3. TODAS as linhas do arquivo devem aparecer no diff (com espaço, + ou -)
-4. NUNCA deixe linhas de fora do diff!
-
-EXEMPLO PRÁTICO:
-Arquivo original (5 linhas):
-1| # comentário
-2| def foo():
-3|     # outro comentário
-4|     return 1
-5| # fim
-
-Diff CORRETO para remover comentários:
---- a/{caminho_relativo}
-+++ b/{caminho_relativo}
-@@ -1,5 +1,2 @@
--# comentário
- def foo():
--    # outro comentário
-     return 1
--# fim
-
-ERROS COMUNS:
-- @@ -1,5 +1 @@ (só 1 linha nova mas mostra 2 linhas)
-- Esquecer de marcar linhas com - (apenas não listar não remove!)
-- Deixar linhas de fora do hunk (TODAS devem estar lá)
-
-SUA TAREFA:
-- Remova TODAS as linhas que contêm # (comentários)
-- Mantenha todo o código Python
-- Inclua TODAS as linhas do arquivo no diff
-- Use - para linhas removidas, espaço para linhas mantidas"""
-            elif eh_adicionar:
-                instrucoes_especificas = f"""TAREFA ESPECÍFICA: Adicionando código
-
-Seu trabalho é ADICIONAR funcionalidade a {caminho_relativo}.
-
-Instruções gerais:
-- Faça PEQUENAS MUDANÇAS, mantenha o código existente
-- Mantenha pelo menos 70% intacto
-- Use + para adicionar linhas novas
-- Use - apenas se absolutamente necessário para mudanças
-
-"""
-            else:
-                instrucoes_especificas = f"""TAREFA GENÉRICA: {prompt_inicial}
-
-Instruções gerais:
-- Faça PEQUENAS MUDANÇAS, mantenha a estrutura
-- Mantenha pelo menos 60% do código intacto
-- Use + para adicionar linhas novas
-- Use - para remover ou modificar
-
-"""
-
-            prompt_chunk = f"""=== EDIÇÃO DE CÓDIGO COM DIFF ===
-
-Arquivo: {caminho_relativo}
-Linhas: {linhas_info[0]}-{linhas_info[1]}
-
-CONTEÚDO DO ARQUIVO (cada linha começa com NÚM| ):
-{conteudo_chunk}
-
-INSTRUÇÃO: {prompt_inicial}
-
-{instrucoes_especificas}
-
-RESPOSTA OBRIGATÓRIA:
-Você PRECISA responder com UM DIFF (formato UniX diff/git).
-O diff DEVE começar com EXATAMENTE:
---- a/{caminho_relativo}
-+++ b/{caminho_relativo}
-
-Depois múltiplos @@ (hunks).
-
-FORMATO CORRETO (COPIE ISTO):
---- a/{caminho_relativo}
-+++ b/{caminho_relativo}
-@@ -1,3 +1,2 @@
- linha com espaço (CONTEXTO - não muda)
--linha removida (tem MENOS na frente)
-+linha adicionada (tem MAIS na frente)
- linha com espaço (CONTEXTO - não muda)
-
-CONTAGEM DE LINHAS NO HUNK:
-@@ -inicio,count_antigo +inicio,count_novo @@
-- count_antigo = quantas linhas do arquivo original aparecem no diff
-- count_novo = quantas linhas terão no resultado (após aplicar + e -)
-- Se remove 2 de 5 linhas: count_antigo=5, count_novo=3
-- TODAS as linhas do count_antigo DEVEM aparecer no hunk abaixo
-
-LEMBRE:
-- [ESPAÇO] + conteúdo = CONTEXTO (linha não muda)
-- [MENOS] + conteúdo = REMOVER esta linha  
-- [MAIS] + conteúdo = ADICIONAR esta linha
-- @@ -linha_inicial,qtde +linha_inicial,qtde @@ = começo de mudança
-
-REGRAS ABSOLAUTAS:
-- SEMPRE comece com --- a/ (NÃO pule isto!)
-- SEMPRE segunda linha é +++ b/
-- NUNCA mande só @@, SEMPRE com headers
-- SEM MARKDOWN (```), SEM EXPLICAÇÕES
-- Se sem mudanças: responda SEM_MUDANCAS
-- Remova prefixos de número do arquivo"""
-
-            print("Aguardando resposta da IA...")
-            try:
-                resposta_ia = callback_ia(conteudo_chunk, prompt_chunk)
-                print(f"Resposta recebida: {len(resposta_ia)} caracteres")
-                print(f"Primeiros 200 chars: {resposta_ia[:200]}")
-            except Exception as e:
-                return False, f"Erro ao chamar a IA no chunk {chunk_num}: {e}"
-
-            if resposta_ia.strip().upper() == "SEM_MUDANCAS":
-                print(f"Chunk {chunk_num}: nenhuma mudança necessária")
-                continue
-
-            is_valid, validation_msg = self.diff_editor.validate_diff(
-                resposta_ia, caminho_arquivo)
-
-            if not is_valid:
-                print(f"ERRO: Diff inválido no chunk {chunk_num}")
-                print(f"   Motivo: {validation_msg}")
-                print(f"   Resposta da IA:\n{resposta_ia}\n")
-
-                if "header diz" in validation_msg.lower() and "mas hunk contém" in validation_msg.lower():
-                    print(f"Tentando corrigir contagem de linhas automaticamente...")
-                    # Extrai o diff e tenta corrigir
-                    diff_corrigido = self._corrigir_contagem_hunk(
-                        resposta_ia, caminho_arquivo)
-                    if diff_corrigido:
-                        is_valid, validation_msg = self.diff_editor.validate_diff(
-                            diff_corrigido, caminho_arquivo)
-                        if is_valid:
-                            print("Contagem de linhas corrigida automaticamente!")
-                            resposta_ia = diff_corrigido
-                else:
-                    print(f"Tentando novamente com feedback...")
-                    caminho_relativo = caminho_arquivo.replace("\\", "/")
-
-                    dica_erro = ""
-                    if "múltiplos headers" in validation_msg.lower():
-                        dica_erro = "\nERRO: Você gerou MÚLTIPLOS diffs com headers repetidos!\nSOLUÇÃO: UM ÚNICO '--- a/' e UM ÚNICO '+++ b/' no topo, depois múltiplos @@ dentro."
-                    elif "faltam headers" in validation_msg.lower() or "sem headers" in validation_msg.lower():
-                        dica_erro = f"\nERRO: Seu diff está FALTANDO as primeiras 2 linhas!\n\nVOCÊ ESCREVEU:\n@@ -1,5 +1,4 @@\n\nCORRETO:\n--- a/{caminho_relativo}\n+++ b/{caminho_relativo}\n@@ -1,5 +1,4 @@\n\nO DIFF TEM QUE COMEÇAR COM ESTAS 2 LINHAS (nessa ordem)!"
-                    elif "sem mudancas" in validation_msg.lower():
-                        dica_erro = "\nERRO: Seu diff não tem mudanças (+ ou -), só contexto!\nSOLUÇÃO: Cada @@ precisa de pelo menos uma linha com + ou -"
-                    elif "Não foi possível aplicar" in validation_msg or "linha" in validation_msg.lower():
-                        dica_erro = f"\nERRO: As linhas do seu diff NÃO EXISTEM no arquivo!\nSOLUÇÃO: Você está inventando conteúdo.\nOBRIGATÓRIO: Use EXATAMENTE as linhas que estão no arquivo.\nVER ABAIXO o conteúdo REAL do arquivo para copiar:"
-                    elif "FALHA CRÍTICA" in validation_msg or "referenciando conteúdo que não existe" in validation_msg:
-                        dica_erro = f"\nERRO CRÍTICO: Você gerou um diff com linhas que NÃO EXISTEM no arquivo!\nISTO É INACEITÁVEL!\n\nOBRIGATÓRIO: CÓPIE EXATAMENTE as linhas do arquivo abaixo para o diff:\n{conteudo_chunk}\n\nNÃO INVENTE linhas! Só use linhas que estão no arquivo acima."
-
-                    prompt_retry = f"""CORREÇÃO NECESSÁRIA - LEIA COM CUIDADO:
-
-ERRO: {validation_msg}{dica_erro}
-
-Arquivo: {caminho_relativo}
-
-CONTEÚDO A EDITAR:
-{conteudo_chunk}
-
-TAREFA: {prompt_inicial}
-
-ESSENCIAL - O DIFF COMEÇA ASSIM:
-
-LINHA 1: --- a/{caminho_relativo}
-LINHA 2: +++ b/{caminho_relativo}
-LINHA 3+: @@ -1,3 +1,2 @@
-          [mudanças com espaço/menos/mais]
-
-NUNCA pule os 2 primeiros headers!
-NUNCA comece direto com @@
-
-EXEMPLO COMPLETO para "remova comentários":
-
---- a/{caminho_relativo}
-+++ b/{caminho_relativo}
-@@ -1,6 +1,5 @@
- def soma(a, b):
--    # função para somar
-     return a + b
- 
- def subtracao(a, b):
--    # função para subtrair
-     return a - b
-
-REGRAS OBRIGATÓRIAS:
- SEMPRE 2 linhas de header NO TOPO (--- a/ depois +++ b/)
- Múltiplos @@ @@ @@ blocos DEPOIS dos headers é OK
- Dentro de cada @@: espaço=igual, menos=remover, mais=adicionar
- REMOVA prefixo de número (escrever "    return" não "5|    return")
- SEM markdown (```), SEM explicações
- SE NÃO CONSEGUIR, responda exatamente com SEM_MUDANCAS
-"""
-
-                    try:
-                        resposta_ia = callback_ia(conteudo_chunk, prompt_retry)
-                        print(
-                            f"Nova resposta recebida: {len(resposta_ia)} caracteres")
-                        is_valid, validation_msg = self.diff_editor.validate_diff(
-                            resposta_ia, caminho_arquivo)
-
-                        if not is_valid:
-                            print(f"ERRO: Diff ainda inválido após retry")
-                            print(f"   Motivo: {validation_msg}")
-                            return False, f"Diff inválido após retry no chunk {chunk_num}: {validation_msg}"
-                    except Exception as e:
-                        return False, f"Erro ao chamar a IA novamente no chunk {chunk_num}: {e}"
-
-            # Aplica diff
-            print(f"Aplicando diff do chunk {chunk_num}...")
-            try:
-                success, apply_msg = self.diff_editor.apply_diff(
-                    caminho_arquivo, resposta_ia)
-                print(f"Diff aplicado com sucesso: {apply_msg}")
-            except (DiffValidationError, DiffApplicationError) as e:
-                print(f"Erro ao aplicar diff: {e}")
-                return False, f"Erro ao aplicar diff do chunk {chunk_num}: {str(e)}"
-
-        print(f"\n{'='*70}")
-        print(f"Arquivo processado com sucesso!")
-        print(f"{'='*70}\n")
-
-        return True, "Arquivo editado com sucesso"
+   
 
     def _corrigir_contagem_hunk(self, diff_text: str, caminho_arquivo: str) -> Optional[str]:
 

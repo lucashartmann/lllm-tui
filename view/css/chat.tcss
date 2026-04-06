@@ -1,12 +1,3 @@
-Screen {
-    background: rgb(214, 214, 214);
-    color: white;
-    align: center middle;
-}
-
-Footer {
-    background: black;
-}
 
 #vg_botoes {
     border: none;
@@ -120,37 +111,6 @@ VerticalGroup {
   min-width: 20%;
 }
 
-ColorPicker {
-    height: 100%;
-    width: 38%;
-    layout: horizontal;
-
-    VerticalGroup:first-child {
-        width: 100%;
-        height: 100%;
-        layout: horizontal;
-        overflow: auto auto;
-    }
-
-    SaturationValuePicker {
-        width: 50%;
-    }
-
-    HuePicker {
-        width: 50%;
-        margin: 1 0 0 1;
-    }
-
-    ColorPreview {
-        display: none;
-    }
-
-    ColorInputs {
-        display: none;
-    }
-
-}
-
 
 App.tamanho-34 {
     #user {
@@ -211,7 +171,7 @@ App.tamanho-98 {
     margin: 0 2 2 3;
 }
 
-#bot VerticalGroup .stt_resposta_bot {
+#bot .stt_resposta_bot {
     margin: 0 2 0 2;
     border: 5% black;
     width: 100%;
@@ -226,4 +186,36 @@ App.tamanho-98 {
 #recarregar {
     width: 3%;
     min-width: 0;
+}
+
+
+DiffScreen {
+    align: center middle;
+}
+
+#dialog {
+    padding: 0 1;
+    width: 90%;
+    height: 90%;
+    border: thick $background 80%;
+    background: rgba(229, 228, 228, 1);
+    align: center middle;
+    text-align: center;
+    content-align: center middle;
+}
+
+
+#dialog #diff-container {
+    width: 2000;
+    height: 200;
+    background: black 70%;
+}
+
+DiffScreen Header {
+    height: 7%;
+}
+
+.stt_diff_bot {
+    margin: 2;
+    background: rgba(89, 39, 39, 0.71);
 }

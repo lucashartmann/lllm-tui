@@ -1,0 +1,9 @@
+Input {
+    margin:5;
+    background: rgb(214, 214, 214);
+    color: black;
+}
+
+ColorPicker {
+    margin:5;
+}

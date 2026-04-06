@@ -45,6 +45,7 @@ class Modelo:
             print(f"ERRO! Modelo.pull {e}")
             return False
 
+
     def listar_nome_modelos(self):
         lista = []
         try:
@@ -75,6 +76,48 @@ class Modelo:
                 return {}
             info = ollama.show(self.modelo)
             return info if isinstance(info, dict) else {}
+        except Exception as e:
+            print(f"ERRO! Modelo._show_model_info {e}")
+            return {}
+        
+    def extrair_info_modelo(self, info):
+        try:
+         
+            modelinfo = info.get("modelinfo", {})
+            details = info.get("details", {})
+            capabilities = info.get("capabilities", [])
+
+            data = {
+                "contexto": self.pegar_valor_por_sufixo(modelinfo, "context_length"),
+                "parametros": details.parameter_size if hasattr(details, "parameter_size") else None,
+                "quantizacao": details.quantization_level if hasattr(details, "quantization_level") else None,
+                "completion": "completion" in capabilities,
+                "insert": "insert" in capabilities,
+                "arquitetura": modelinfo.get("general.architecture"),
+                "embedding": self.pegar_valor_por_sufixo(modelinfo, "embedding_length"),
+                "layers": self.pegar_valor_por_sufixo(modelinfo, "block_count"),
+                "capabilidades": capabilities,
+            }
+
+            return data
+
+        except Exception as e:
+            print(f"Erro ao extrair info: {e}")
+            return {}
+        
+    def pegar_valor_por_sufixo(self, dicionario, sufixo):
+        for k, v in dicionario.items():
+            if k.endswith(sufixo):
+                return v
+        return None
+        
+    def _show_model_info2(self, modelo):
+        try:
+            if not modelo:
+                return {}
+            info = ollama.show(modelo)
+            # info["name"] = modelo
+            return self.extrair_info_modelo(info)
         except Exception as e:
             print(f"ERRO! Modelo._show_model_info {e}")
             return {}
@@ -318,7 +361,7 @@ class Modelo:
 
         return "\n\n".join(contexto_chunks), "rag_chunks", acumulado_tokens, limite_modelo
 
-    def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None):
+    def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None, tools=None):
         try:
             acumulado = ""
             ultima_parte = None
@@ -327,6 +370,7 @@ class Modelo:
                     model=self.modelo,
                     messages=[{'role': 'user', 'content': f'{mensagem}'}],
                     stream=True,
+                    tools=tools,
                 )
             else:
                 imagens = caminho_image if isinstance(
@@ -336,6 +380,7 @@ class Modelo:
                     messages=[
                         {'role': 'user', 'content': f'{mensagem}', 'images': imagens}],
                     stream=True,
+                    tools=tools,
                 )
 
             for parte in resposta:
