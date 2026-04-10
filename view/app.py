@@ -1,15 +1,16 @@
 from textual import events
 from textual.app import App
 from textual.binding import Binding
-from model.midia import ChunkedFileProcessor
 from model.modelo import Modelo
 from textual.color import Color
 from view import chat, config, models, skills
+from tools import arquivo, diagrama, internet
+
 
 class App(App):
-    
+
     modelo = Modelo()
-    file_processor = ChunkedFileProcessor()
+
     caminhos = list()
     nome_bot = "bot"
     nome_user = None
@@ -20,12 +21,17 @@ class App(App):
     - nome do user: {nome_user}
     Responda usando o idioma da mensagem a seguir:\n
     '''
-    _stream_started_at = None
-    _first_token_latency = None
-    _current_response_container = None
-    _current_response_widget = None
-    lista_skills = []
+    CURRENT_DIRECTORY = "C:/Users/dudua/Music/Projetos/lllm-tui/skills/diagramas/"
+    SKILLS = {
+        "astah_uml_class": open(CURRENT_DIRECTORY + "astah/uml_class.md", "r", encoding="utf-8").read(),
+        "astah_uml_sequence": open(CURRENT_DIRECTORY + "astah/uml_sequence.md", "r", encoding="utf-8").read(),
+        "astah_uml_use_case": open(CURRENT_DIRECTORY + "astah/uml_use_case.md", "r", encoding="utf-8").read(),
+        "brmodelo_conceitual": open(CURRENT_DIRECTORY + "brmodelo/conceitual.md", "r", encoding="utf-8").read(),
+        "brmodelo_logico": open(CURRENT_DIRECTORY + "brmodelo/logico.md", "r", encoding="utf-8").read(),
+    }
+
     
+
     SCREENS = {
         "inicio": chat.ChatScreen,
         "config": config.ConfigScreen,
@@ -55,7 +61,6 @@ class App(App):
                 self.add_class(self.WIDTH_BREAKPOINS[w])
                 break
 
-
     def action_sair(self):
         self.notify("Saindo...")
         if self.modelo.modelo:
@@ -63,4 +68,4 @@ class App(App):
         self.exit()
 
     def on_mount(self):
-            self.push_screen("inicio")
+        self.push_screen("inicio")

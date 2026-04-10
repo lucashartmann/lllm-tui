@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import ollama
-
+from tools import TOOLS_MAP, TOOLS_SCHEMA
 
 class Modelo:
 
@@ -25,7 +25,7 @@ class Modelo:
             print(f"ERRO! Modelo.deletar {e}")
             return False
 
-    def unload_model(self):
+    def descarregar_modelo(self):
         try:
             ollama.generate(
                 model=self.modelo,
@@ -80,6 +80,17 @@ class Modelo:
             print(f"ERRO! Modelo._show_model_info {e}")
             return {}
         
+    def _show_model_info2(self, modelo):
+        try:
+            if not modelo:
+                return {}
+            info = ollama.show(modelo)
+            # info["name"] = modelo
+            return self.extrair_info_modelo(info)
+        except Exception as e:
+            print(f"ERRO! Modelo._show_model_info {e}")
+            return {}
+        
     def extrair_info_modelo(self, info):
         try:
          
@@ -105,22 +116,7 @@ class Modelo:
             print(f"Erro ao extrair info: {e}")
             return {}
         
-    def pegar_valor_por_sufixo(self, dicionario, sufixo):
-        for k, v in dicionario.items():
-            if k.endswith(sufixo):
-                return v
-        return None
-        
-    def _show_model_info2(self, modelo):
-        try:
-            if not modelo:
-                return {}
-            info = ollama.show(modelo)
-            # info["name"] = modelo
-            return self.extrair_info_modelo(info)
-        except Exception as e:
-            print(f"ERRO! Modelo._show_model_info {e}")
-            return {}
+
 
     @staticmethod
     def estimar_tokens(texto: str) -> int:
@@ -165,47 +161,7 @@ class Modelo:
             return max(validos)
         return padrao
 
-    def suporta_imagem(self) -> bool:
-        info = self._show_model_info()
-
-        capacidades = info.get(
-            "capabilities", []) if isinstance(info, dict) else []
-        if isinstance(capacidades, list):
-            caps = {str(c).lower() for c in capacidades}
-            if "vision" in caps or "image" in caps or "multimodal" in caps:
-                return True
-
-        details = info.get("details", {}) if isinstance(info, dict) else {}
-        family = str(details.get("family", "")).lower()
-        families = [str(f).lower() for f in details.get("families", [])] if isinstance(
-            details.get("families", []), list) else []
-        if any("clip" in f or "vision" in f for f in [family] + families):
-            return True
-
-        nome = str(self.modelo).lower()
-        return any(v in nome for v in ["llava", "bakllava", "moondream", "vision"])
-
-    @staticmethod
-    def _dividir_em_chunks_tokens(texto: str, chunk_size: int = 800, overlap: int = 120) -> List[str]:
-        palavras = texto.split()
-        if not palavras:
-            return []
-
-        if len(palavras) <= chunk_size:
-            return [" ".join(palavras)]
-
-        chunks = []
-        inicio = 0
-        passo = max(1, chunk_size - overlap)
-
-        while inicio < len(palavras):
-            fim = min(inicio + chunk_size, len(palavras))
-            chunks.append(" ".join(palavras[inicio:fim]))
-            if fim >= len(palavras):
-                break
-            inicio += passo
-
-        return chunks
+ 
 
     def gerar_embedding(self, texto: str, embedding_model: Optional[str] = None) -> Optional[List[float]]:
         model_name = embedding_model or self.embedding_model
@@ -243,125 +199,68 @@ class Modelo:
         if norma_1 == 0 or norma_2 == 0:
             return -1.0
         return produto / (norma_1 * norma_2)
-
-    def _ler_arquivo_texto(self, caminho: str) -> Optional[str]:
+    
+    def enviar_mensagem_com_ferramentas(self, mensagem, tools=TOOLS_SCHEMA):
         try:
-            return Path(caminho).read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            try:
-                return Path(caminho).read_text(encoding="latin-1")
-            except Exception as e:
-                print(f"ERRO! Modelo._ler_arquivo_texto {e}")
-                return None
+            messages = [
+                {"role": "user", "content": mensagem}
+            ]
+
+            while True:
+                response = ollama.chat(
+                    model=self.modelo,
+                    messages=messages,
+                    tools=tools
+                )
+
+                msg = response["message"]
+
+             
+                if "tool_calls" in msg:
+                    messages.append(msg)
+
+                    for call in msg["tool_calls"]:
+                        name = call["function"]["name"]
+                        args = call["function"]["arguments"]
+
+                        print(f"[TOOL CALL] {name} -> {args}")
+                        
+                        if name == "web_search":
+                            result = TOOLS_MAP[name](**args)
+
+                            messages.append({
+                                "role": "tool",
+                                "content": str(result)
+                            })
+
+                            messages.append({
+                                "role": "user",
+                                "content": "Agora abra um dos links usando browse_page."
+                            })
+
+                            
+                        
+                        else:
+
+                            result = TOOLS_MAP[name](**args)
+
+                            messages.append({
+                                "role": "tool",
+                                "content": str(result)
+                            })
+                    continue
+                             
+
+                return msg["content"]
+
         except Exception as e:
-            print(f"ERRO! Modelo._ler_arquivo_texto {e}")
+            print(f"ERRO! {e}")
             return None
 
-    def montar_contexto_arquivos(
-        self,
-        caminhos: List[str],
-        pergunta: str,
-        margem_resposta_tokens: int = 1200,
-        chunk_size: int = 800,
-        overlap: int = 120,
-        top_k: int = 6,
-    ) -> Tuple[str, str, int, int]:
-        limite_modelo = self.obter_limite_contexto()
-        orcamento_prompt = max(512, limite_modelo - margem_resposta_tokens)
 
-        blocos = []
-        for caminho in caminhos:
-            conteudo = self._ler_arquivo_texto(caminho)
-            if not conteudo:
-                continue
-            blocos.append(f"Arquivo: {caminho}\n```\n{conteudo}\n```")
-
-        if not blocos:
-            self.ultimo_contexto_stats = {
-                "chunks_total": 0,
-                "chunks_selecionados": 0,
-                "tokens_contexto": 0,
-            }
-            return "", "sem_arquivos", 0, limite_modelo
-
-        contexto_completo = "\n\n".join(blocos)
-        prompt_completo = f"{pergunta}\n\n{contexto_completo}"
-        tokens_prompt = self.estimar_tokens(prompt_completo)
-
-        if tokens_prompt <= orcamento_prompt:
-            self.ultimo_contexto_stats = {
-                "chunks_total": 0,
-                "chunks_selecionados": 0,
-                "tokens_contexto": tokens_prompt,
-            }
-            return contexto_completo, "arquivo_inteiro", tokens_prompt, limite_modelo
-
-        chunks_metadados = []
-        for caminho in caminhos:
-            conteudo = self._ler_arquivo_texto(caminho)
-            if not conteudo:
-                continue
-            chunks = self._dividir_em_chunks_tokens(
-                conteudo, chunk_size=chunk_size, overlap=overlap)
-            for idx, chunk in enumerate(chunks, 1):
-                chunks_metadados.append({
-                    "arquivo": caminho,
-                    "idx": idx,
-                    "texto": chunk,
-                })
-
-        if not chunks_metadados:
-            self.ultimo_contexto_stats = {
-                "chunks_total": 0,
-                "chunks_selecionados": 0,
-                "tokens_contexto": tokens_prompt,
-            }
-            return contexto_completo, "fallback_completo", tokens_prompt, limite_modelo
-
-        emb_pergunta = self.gerar_embedding(pergunta)
-        if not emb_pergunta:
-            selecionados = chunks_metadados[:top_k]
-        else:
-            pontuados = []
-            for item in chunks_metadados:
-                emb_chunk = self.gerar_embedding(item["texto"])
-                if emb_chunk:
-                    score = self._similaridade_cosseno(emb_pergunta, emb_chunk)
-                else:
-                    score = -1.0
-                pontuados.append((score, item))
-
-            pontuados.sort(key=lambda x: x[0], reverse=True)
-            selecionados = [item for _, item in pontuados[:top_k]]
-
-        contexto_chunks = []
-        acumulado_tokens = self.estimar_tokens(pergunta)
-        for item in selecionados:
-            bloco = (
-                f"Arquivo: {item['arquivo']}\n"
-                f"Chunk: {item['idx']}\n"
-                f"```\n{item['texto']}\n```"
-            )
-            custo = self.estimar_tokens(bloco)
-            if acumulado_tokens + custo > orcamento_prompt and contexto_chunks:
-                break
-            contexto_chunks.append(bloco)
-            acumulado_tokens += custo
-
-        if not contexto_chunks:
-            contexto_chunks.append(
-                f"Arquivo: {selecionados[0]['arquivo']}\nChunk: {selecionados[0]['idx']}\n```\n{selecionados[0]['texto']}\n```"
-            )
-
-        self.ultimo_contexto_stats = {
-            "chunks_total": len(chunks_metadados),
-            "chunks_selecionados": len(contexto_chunks),
-            "tokens_contexto": acumulado_tokens,
-        }
-
-        return "\n\n".join(contexto_chunks), "rag_chunks", acumulado_tokens, limite_modelo
-
-    def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None, tools=None):
+    def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None, tools=TOOLS_SCHEMA):
+        if tools:
+            return self.enviar_mensagem_com_ferramentas(mensagem, tools=tools)
         try:
             acumulado = ""
             ultima_parte = None
@@ -372,6 +271,26 @@ class Modelo:
                     stream=True,
                     tools=tools,
                 )
+                
+                msg = resposta["message"]
+                if "tool_calls" in msg:
+                    for call in msg["tool_calls"]:
+                        name = call["function"]["name"]
+                        args = call["function"]["arguments"]
+
+                        print(f"[TOOL CALL] {name} -> {args}")
+
+                        result = TOOLS_MAP[name](**args)
+
+
+                        messages.append(msg)
+                        messages.append({
+                            "role": "tool",
+                            "content": str(result)
+                        })
+
+                        continue
+                
             else:
                 imagens = caminho_image if isinstance(
                     caminho_image, list) else [caminho_image]
@@ -435,6 +354,3 @@ class Modelo:
             if valor is not None:
                 metricas[campo] = valor
         return metricas
-
-    def enviar_mensagem_sync(self, mensagem, caminho_image=None):
-        return self.enviar_mensagem(mensagem, caminho_image)

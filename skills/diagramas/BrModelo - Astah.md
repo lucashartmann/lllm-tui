@@ -27,7 +27,8 @@ If information is clearly missing (e.g., entities with no relationships), make r
 
 | User mentions / context                                      | Diagram type       |
 |--------------------------------------------------------------|--------------------|
-| entities, tables, foreign keys, database schema, ER, BR Modelo | ER Conceptual   |
+| entities, tables, foreign keys, database schema, ER, BR Modelo conceptual | ER Conceptual |
+| lógico, logical model, relational schema, BR Modelo lógico, tabelas com FK/PK | Lógico brModelo |
 | classes, objects, inheritance, methods, attributes, OOP      | UML Class          |
 | messages, calls, requests, responses, flow between services  | UML Sequence       |
 | actors, users, system features, use cases, <<include>>       | UML Use Case       |
@@ -166,63 +167,127 @@ Follow these rules exactly. Violations cause broken or unreadable diagrams.
 
 ### ER Conceptual (BR Modelo style)
 
-**Color palette (mais fiel ao brModelo):**
-- Entity rectangle: fill="#FFF9E6" stroke="#1E4A7C" stroke-width="2" rx="6"
-- Weak entity: fill="#FFF9E6" stroke="#1E4A7C" stroke-width="4" rx="6" (dupla borda simulada)
-- Attribute ellipse: fill="#EAF3DE" stroke="#3B6D11" stroke-width="1"
-- Key attribute (PK): same + text-decoration="underline"
-- Relationship diamond: fill="#FFEBB8" stroke="#854F0B" stroke-width="1.5"
-- Connection line: stroke="#333" stroke-width="1.5" fill="none"
-- Cardinality text: fill="#222" font-size="11" font-weight="bold"
+> ⚠️ CRITICAL — READ BEFORE DRAWING:
+> **ENTITIES are RECTANGLES. Attributes are CIRCLES (small, ~r=5). NEVER use ellipses/balloons for entities or attributes.**
+> The first version of this diagram used colored ellipses for entities — that is WRONG and was corrected by the user.
+> brModelo is BLACK AND WHITE. No fill colors. Simple geometry only.
 
-**Entity pattern:**
+**Visual rules (strict brModelo):**
+- Entity: `<rect>` with double border (two nested rects, outer stroke-width="2", inner offset 4px all sides, stroke-width="1") — fill white, stroke black
+- Weak entity: triple border (three nested rects)
+- Attribute: small `<circle>` r=5, fill="white" stroke="black" stroke-width="1.2" — label as plain text next to circle
+- Key attribute (PK): `<circle>` r=6, fill="black" stroke="black" — label next to circle
+- Multivalued attribute: two concentric circles (r=5 inner, r=8 outer), both stroke="black"
+- Composite attribute: circle connected to sub-circles with lines
+- Relationship: `<polygon>` diamond, fill="white" stroke="black" stroke-width="1.5"
+- Weak relationship: double diamond (two nested polygons)
+- Generalization/specialization: triangle `<polygon>` pointing toward superclass, fill="white" stroke="black"
+- Relationship attribute: small `<rect>` connected to relationship diamond with a dashed line
+- Cardinality: plain text (0,1) (1,1) (0,n) (1,n) next to connecting lines
+- Connection line: stroke="black" stroke-width="1.2" fill="none"
+- ALL elements: black and white only — no color fills, no colored strokes
+
+**Entity pattern (double border):**
 ```svg
-<rect x="X" y="Y" width="W" height="48" rx="6"
-  fill="#FFF9E6" stroke="#1E4A7C" stroke-width="2"/>
+<!-- outer border -->
+<rect x="X" y="Y" width="W" height="44" fill="white" stroke="black" stroke-width="2"/>
+<!-- inner border (offset 4px) -->
+<rect x="X+4" y="Y+4" width="W-8" height="36" fill="white" stroke="black" stroke-width="1"/>
 <text x="CX" y="CY" text-anchor="middle" dominant-baseline="central"
-  font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#1E4A7C">
+  font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="black">
   EntityName
 </text>
 ```
 
-**Attribute ellipse pattern (place around its entity):**
+**Attribute circle pattern (place around its entity):**
 ```svg
-<ellipse cx="CX" cy="CY" rx="45" ry="18"
-  fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-<text x="CX" y="CY" text-anchor="middle" dominant-baseline="central"
-  font-family="Arial,sans-serif" font-size="12" fill="#1a4a10">attr_name</text>
-<line x1="entity_edge_x" y1="entity_edge_y" x2="ellipse_cx" y2="ellipse_cy"
-  stroke="#555" stroke-width="0.5" fill="none"/>
-```
+<!-- Normal attribute: small white circle + label as text beside it -->
+<circle cx="CX" cy="CY" r="5" fill="white" stroke="black" stroke-width="1.2"/>
+<text x="CX+8" y="CY" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">attr_name</text>
+<line x1="entity_edge_x" y1="entity_edge_y" x2="CX" y2="CY"
+  stroke="black" stroke-width="1" fill="none"/>
 
-**Key attribute (underline via tspan):**
-```svg
-<text ... text-decoration="underline">id</text>
+<!-- Key attribute (PK): filled black circle -->
+<circle cx="CX" cy="CY" r="6" fill="black" stroke="black" stroke-width="1.2"/>
+<text x="CX+9" y="CY" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">id_attr</text>
+
+<!-- Multivalued attribute: double circle -->
+<circle cx="CX" cy="CY" r="5" fill="white" stroke="black" stroke-width="1.2"/>
+<circle cx="CX" cy="CY" r="9" fill="none" stroke="black" stroke-width="1"/>
+<text x="CX+11" y="CY" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">multi_attr</text>
 ```
 
 **Relationship diamond:**
 ```svg
-<!-- Diamond centered at (CX, CY) with half-width HW, half-height HH -->
+<!-- Diamond centered at (CX, CY), fill white, stroke black — NO colors -->
 <polygon points="CX,CY-HH  CX+HW,CY  CX,CY+HH  CX-HW,CY"
-  fill="#FAEEDA" stroke="#854F0B" stroke-width="0.8"/>
+  fill="white" stroke="black" stroke-width="1.5"/>
 <text x="CX" y="CY" text-anchor="middle" dominant-baseline="central"
-  font-family="Arial,sans-serif" font-size="12" font-weight="bold" fill="#633806">
+  font-family="Arial,sans-serif" font-size="12" font-weight="bold" fill="black">
   has
 </text>
 ```
 
 **Cardinality label near connection:**
 ```svg
-<text x="X" y="Y" font-family="Arial,sans-serif" font-size="11" fill="#444">1</text>
-<text x="X" y="Y" font-family="Arial,sans-serif" font-size="11" fill="#444">N</text>
+<text x="X" y="Y" font-family="Arial,sans-serif" font-size="11" fill="black">(1,n)</text>
 ```
 
 **Layout strategy for ER:**
 - Place entities first (spread across the canvas)
 - Place relationship diamonds between connected entities
-- Place attribute ellipses around their entity (top, bottom, left, right), spaced 70–90px from entity center
+- Place attribute circles around their entity (top, bottom, left, right), spaced 60–80px from entity edge
 - Draw connection lines last (entity edge → attribute center; entity edge → diamond; diamond → entity)
 - Compute connection endpoints at the edge of the shape (not center-to-center, or lines will render through shapes)
+
+---
+
+### Lógico brModelo (Relational / Logical style)
+
+> This is the LOGICAL model — different from the conceptual ER. It looks like database tables, not entity-relationship diagrams.
+
+**Visual rules:**
+- Each table: a rectangle with a colored header bar + list of attributes below, NO outer double border
+- Header bar: fill="#4A7CC7" (blue), white bold text = table name
+- Body: fill="white" stroke="#4A7CC7" stroke-width="1", attributes listed as rows
+- Primary key attribute: 🔑 yellow key icon (use ★ or just bold + underline text if SVG icons unavailable) — draw a small `<polygon>` key shape or use text "🔑"
+- Foreign key attribute: green key icon (different color) — text "🗝" or small colored indicator
+- Simple attribute: plain text, left-aligned, font-size="12"
+- Relationships: plain lines between tables (no diamond), with cardinality labels (0,1), (1,n) etc.
+- NO relationship diamonds — those belong to the conceptual model
+- Cardinality placed next to the line ends
+
+**Table pattern:**
+```svg
+<!-- Header -->
+<rect x="X" y="Y" width="W" height="28" fill="#4A7CC7" stroke="#2E5FA3" stroke-width="1"/>
+<text x="CX" y="Y+14" text-anchor="middle" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="white">
+  TableName
+</text>
+<!-- Body -->
+<rect x="X" y="Y+28" width="W" height="ROW_H * N_ATTRS" fill="white" stroke="#4A7CC7" stroke-width="1"/>
+<!-- Each attribute row (ROW_H = 22px) -->
+<!-- PK attribute -->
+<text x="X+20" y="Y+28+11" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">🔑 Codigo</text>
+<!-- FK attribute -->
+<text x="X+20" y="Y+28+33" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">🗝 FK_Entidade_Cod</text>
+<!-- Normal attribute -->
+<text x="X+20" y="Y+28+55" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="11" fill="black">   Nome</text>
+```
+
+**Relationship line:**
+```svg
+<line x1="X1" y1="Y1" x2="X2" y2="Y2" stroke="black" stroke-width="1.2" fill="none"/>
+<text x="X1+5" y="Y1-4" font-family="Arial,sans-serif" font-size="11" fill="black">(1,1)</text>
+<text x="X2-20" y="Y2-4" font-family="Arial,sans-serif" font-size="11" fill="black">(0,n)</text>
+```
 
 ---
 
@@ -259,33 +324,42 @@ Follow these rules exactly. Violations cause broken or unreadable diagrams.
   font-family="Arial,sans-serif" font-size="12" fill="#3C3489">+ getName(): String</text>
 ```
 
-**Relationship lines:**
+**Relationship lines (always include multiplicity labels and optional role name):**
 ```svg
-<!-- Inheritance (solid line + open triangle at parent) -->
+<!-- Inheritance (solid line + open triangle pointing to parent) -->
 <line x1="X1" y1="Y1" x2="X2" y2="Y2"
   stroke="#534AB7" stroke-width="0.8" fill="none"
   marker-end="url(#tri-open)"/>
 
-<!-- Composition (solid line + filled diamond at owner) -->
+<!-- Association (solid line + filled arrowhead, with multiplicity + label) -->
+<line x1="X1" y1="Y1" x2="X2" y2="Y2"
+  stroke="#534AB7" stroke-width="0.8" fill="none"
+  marker-end="url(#arrow)"/>
+<!-- Multiplicity near source end -->
+<text x="X1+8" y="Y1-6" font-family="Arial,sans-serif" font-size="11" fill="#333">1</text>
+<!-- Multiplicity near target end -->
+<text x="X2-20" y="Y2-6" font-family="Arial,sans-serif" font-size="11" fill="#333">0..*</text>
+<!-- Role/label near midpoint -->
+<text x="MID_X" y="MID_Y-8" text-anchor="middle"
+  font-family="Arial,sans-serif" font-size="11" fill="#333">▶ role name</text>
+
+<!-- Composition (solid line + filled diamond at owner end) -->
 <line x1="X1" y1="Y1" x2="X2" y2="Y2"
   stroke="#534AB7" stroke-width="0.8" fill="none"
   marker-start="url(#diamond-fill)"/>
 
-<!-- Aggregation (solid line + open diamond at whole) -->
+<!-- Aggregation (solid line + open diamond at whole end) -->
 <line x1="X1" y1="Y1" x2="X2" y2="Y2"
   stroke="#534AB7" stroke-width="0.8" fill="none"
   marker-start="url(#diamond-open)"/>
-
-<!-- Association (solid line + open arrow) -->
-<line x1="X1" y1="Y1" x2="X2" y2="Y2"
-  stroke="#534AB7" stroke-width="0.8" fill="none"
-  marker-end="url(#arrow-open)"/>
 
 <!-- Dependency (dashed line + open arrow) -->
 <line x1="X1" y1="Y1" x2="X2" y2="Y2"
   stroke="#534AB7" stroke-width="0.8" fill="none"
   stroke-dasharray="6 3" marker-end="url(#arrow-open)"/>
 ```
+
+**Multiplicity notation:** Use UML standard: `1`, `0..1`, `1..*`, `0..*`, `*`. Place near each line end, offset ~8px from the endpoint so it doesn't overlap the class box.
 
 ---
 
@@ -337,47 +411,71 @@ Follow these rules exactly. Violations cause broken or unreadable diagrams.
 
 ### UML Use Case Diagram (Astah style)
 
-**Color palette:**
-- System boundary: fill="none" stroke="#185FA5" stroke-width="1" rx="8"
-- System title: font-size="14" font-weight="bold" fill="#185FA5"
-- Use case ellipse: fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"
-- Actor figure: stroke="#333" stroke-width="1" fill="none"
-- Association line: stroke="#555" stroke-width="0.5"
-- Include/extend: stroke="#555" stroke-width="0.5" stroke-dasharray="5 3"
+**Visual rules (from Astah screenshots):**
+- System boundary: plain rectangle, fill="none" stroke="#888" stroke-width="1", label "uc" in top-left corner inside
+- Use case ellipses: fill="#FFFACD" (light yellow) stroke="#888" stroke-width="1" — NOT blue
+- Actor: stick figure, black strokes, name below
+- Association line: plain solid line, no arrowhead, stroke="black" stroke-width="1"
+- Generalization (actor inherits actor): solid line + open triangle pointing to parent actor
+- <<include>>: dashed line + open arrowhead pointing TO the included use case, label «include»
+- <<extend>>: dashed line + open arrowhead pointing TO the base use case, label «extend»
+
+**System boundary:**
+```svg
+<rect x="X" y="Y" width="W" height="H" fill="none" stroke="#888" stroke-width="1"/>
+<!-- "uc" label top-left inside boundary -->
+<text x="X+8" y="Y+16" font-family="Arial,sans-serif" font-size="12" fill="#555">uc</text>
+```
 
 **Actor figure pattern (stick figure):**
 ```svg
 <!-- Head -->
-<circle cx="CX" cy="Y+12" r="12" fill="none" stroke="#333" stroke-width="1"/>
+<circle cx="CX" cy="Y" r="10" fill="none" stroke="black" stroke-width="1.2"/>
 <!-- Body -->
-<line x1="CX" y1="Y+24" x2="CX" y2="Y+52" stroke="#333" stroke-width="1"/>
+<line x1="CX" y1="Y+10" x2="CX" y2="Y+36" stroke="black" stroke-width="1.2"/>
 <!-- Arms -->
-<line x1="CX-16" y1="Y+34" x2="CX+16" y2="Y+34" stroke="#333" stroke-width="1"/>
+<line x1="CX-14" y1="Y+20" x2="CX+14" y2="Y+20" stroke="black" stroke-width="1.2"/>
 <!-- Legs -->
-<line x1="CX" y1="Y+52" x2="CX-14" y2="Y+70" stroke="#333" stroke-width="1"/>
-<line x1="CX" y1="Y+52" x2="CX+14" y2="Y+70" stroke="#333" stroke-width="1"/>
-<!-- Actor name below -->
-<text x="CX" y="Y+85" text-anchor="middle"
-  font-family="Arial,sans-serif" font-size="12" fill="#333">ActorName</text>
+<line x1="CX" y1="Y+36" x2="CX-12" y2="Y+54" stroke="black" stroke-width="1.2"/>
+<line x1="CX" y1="Y+36" x2="CX+12" y2="Y+54" stroke="black" stroke-width="1.2"/>
+<!-- Name below -->
+<text x="CX" y="Y+68" text-anchor="middle" dominant-baseline="central"
+  font-family="Arial,sans-serif" font-size="12" fill="black">ActorName</text>
 ```
 
-**Use case ellipse:**
+**Use case ellipse (yellow, as in Astah):**
 ```svg
-<ellipse cx="CX" cy="CY" rx="70" ry="24"
-  fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<ellipse cx="CX" cy="CY" rx="75" ry="26"
+  fill="#FFFACD" stroke="#888" stroke-width="1"/>
 <text x="CX" y="CY" text-anchor="middle" dominant-baseline="central"
-  font-family="Arial,sans-serif" font-size="12" fill="#0C447C">Use case name</text>
+  font-family="Arial,sans-serif" font-size="12" fill="black">Use case name</text>
 ```
 
-**Include / Extend:**
+**Actor generalization (Dosen → User in image):**
 ```svg
-<!-- <<include>> -->
+<!-- Solid line + open triangle pointing to parent -->
+<line x1="child_CX" y1="child_Y" x2="parent_CX" y2="parent_Y"
+  stroke="black" stroke-width="1" marker-end="url(#tri-open)"/>
+```
+
+**Include / Extend (dashed + arrow + italic label):**
+```svg
+<!-- <<include>> dashed arrow -->
 <line x1="X1" y1="Y1" x2="X2" y2="Y2"
-  stroke="#555" stroke-width="0.5" stroke-dasharray="5 3"
+  stroke="#555" stroke-width="1" stroke-dasharray="6 3"
   marker-end="url(#arrow)"/>
-<text x="MID_X" y="MID_Y-6" text-anchor="middle"
-  font-family="Arial,sans-serif" font-size="10" font-style="italic" fill="#555">
+<text x="MID_X" y="MID_Y-7" text-anchor="middle"
+  font-family="Arial,sans-serif" font-size="11" font-style="italic" fill="#333">
   «include»
+</text>
+
+<!-- <<extend>> dashed arrow -->
+<line x1="X1" y1="Y1" x2="X2" y2="Y2"
+  stroke="#555" stroke-width="1" stroke-dasharray="6 3"
+  marker-end="url(#arrow)"/>
+<text x="MID_X" y="MID_Y-7" text-anchor="middle"
+  font-family="Arial,sans-serif" font-size="11" font-style="italic" fill="#333">
+  «extend»
 </text>
 ```
 
@@ -473,6 +571,7 @@ Go through this list before outputting:
 - [ ] `<defs>` block is present with all needed markers
 - [ ] No hardcoded dark background colors (background must be transparent)
 - [ ] Multi-line text uses explicit `<tspan dy="1.2em">` — SVG does not auto-wrap
+- [ ] **BR Modelo only:** Entities are RECTANGLES (double border), attributes are CIRCLES (r=5), PKs are FILLED circles — never ellipses/balloons for entities or attributes, never colored fills
 
 ---
 

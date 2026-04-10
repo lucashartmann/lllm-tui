@@ -37,19 +37,19 @@ class ModelsScreen(Screen):
                 item = ListItem(container)
                 self.query_one(ListView).append(item)
                 item.mount(container)
-                if modelo["name"]:
+                if "name" in modelo.keys():
                     container.mount(
                         Static(f"Nome: {str(modelo['name'])}", id="modelo_nome"))
-                if modelo["contexto"]:
+                if "contexto" in modelo.keys():
                     container.mount(
                         Static(f"Contexto: {str(modelo['contexto'])}", id="modelo_contexto"))
-                if modelo["capabilidades"]:
+                if "capabilidades" in modelo.keys():
                     container.mount(Static(
                         f"Capabilidades: {str(modelo['capabilidades'])}", id="modelo_capabilidades"))
-                if modelo["parametros"]:
+                if "parametros" in modelo.keys():
                     container.mount(
                         Static(f"Parâmetros: {str(modelo['parametros'])}", id="modelo_parametros"))
-                if modelo["quantizacao"]:
+                if "quantizacao" in modelo.keys():
                     container.mount(
                         Static(f"Quantização: {str(modelo['quantizacao'])}", id="modelo_quantizacao"))
                 # if modelo["completion"]:
@@ -58,10 +58,10 @@ class ModelsScreen(Screen):
                 #     container.mount(Static(f"Insert: {str(modelo['insert'])}"))
                 # if modelo["arquitetura"]:
                 #     container.mount(Static(str(modelo["arquitetura"])))
-                if modelo["embedding"]:
+                if "embedding" in modelo.keys():
                     container.mount(
                         Static(f"Embedding: {str(modelo['embedding'])}", id="modelo_embedding"))
-                if modelo["layers"]:
+                if "layers" in modelo.keys():
                     container.mount(
                         Static(f"Layers: {str(modelo['layers'])}", id="modelo_layers"))
 

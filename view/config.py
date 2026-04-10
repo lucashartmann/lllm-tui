@@ -2,7 +2,7 @@ from textual.screen import Screen
 from textual.widgets import Checkbox
 from textual.containers import Vertical, Grid, VerticalScroll, Horizontal, HorizontalGroup
 from textual.widgets import Button, Input, Select, Tabs, Tab, Footer, MaskedInput
-from model.skills import diagrama, internet
+from tools import diagrama, internet
 from textual_colorpicker import ColorPicker
 
 
