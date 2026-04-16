@@ -111,7 +111,7 @@ class ChatScreen(Screen):
 
     async def processamento(self, prompt_inicial) -> None:
         resposta = None
-        mensagem = self.config + prompt_inicial
+        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.config + "\n" +  prompt_inicial
 
         if self.caminhos:
             arquivos = []
@@ -150,11 +150,11 @@ class ChatScreen(Screen):
                 for caminho in arquivos:
                     mensagem += f"-{caminho}\n"
 
-                resposta = self.app.modelo.enviar_mensagem(
-                    mensagem, arquivos, caminho_image=imagens if imagens else None)
+                resposta = self.app.modelo.enviar_mensagem_com_ferramentas(
+                    mensagem)
 
         else:
-            resposta = self.app.modelo.enviar_mensagem(mensagem)
+            resposta = self.app.modelo.enviar_mensagem_com_ferramentas(mensagem)
 
         print(resposta)
         if resposta:
@@ -186,6 +186,7 @@ class ChatScreen(Screen):
         except:
             widget = Static(classes="stt_pensando")
             bot_container.mount(widget)
+        bot_container.scroll_end(animate=False)
         frames = ["●○○", "○●○", "○○●"]
         if not self.carregando_mensagem:
             return

@@ -1,4 +1,4 @@
-from tools import arquivo, diagrama, internet
+from tools import arquivo, diagrama, internet, banco
 
 TOOLS_MAP = {
     "web_search": internet.web_search,
@@ -6,12 +6,93 @@ TOOLS_MAP = {
     "search_images": internet.search_images,
     "search_videos": internet.search_videos,
     "learn_topic": internet.learn_topic,
-    # "generate_diagram": diagrama.generate_diagram,
+    "generate_diagram": diagrama.gerar_diagrama,
     "read_file": arquivo.read_file,
     "write_file": arquivo.write_file,
+    "salvar_no_banco": banco.salvar_no_banco,
+    "pesquisar_no_banco": banco.pesquisar_no_banco,
 }
 
 TOOLS_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_images",
+            "description": "Busca imagens na internet",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_videos",
+            "description": "Busca vídeos na internet",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_diagram",
+            "description": "Gera um diagrama a partir de uma descrição textual",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request": {
+                        "type": "string",
+                        "description": "A descrição do diagrama a ser gerado"
+                    }
+                },
+                "required": ["request"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "pesquisar_no_banco",
+            "description": "Pesquisa informações no banco de dados",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "A consulta de pesquisa para encontrar informações relevantes no banco de dados"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "salvar_no_banco",
+            "description": "Salva uma informação no banco de dados",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "info": {
+                        "type": "string",
+                        "description": "A informação a ser salva no banco de dados"
+                    }
+                },
+                "required": ["info"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {

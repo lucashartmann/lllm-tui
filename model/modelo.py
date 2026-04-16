@@ -1,10 +1,13 @@
 import math
+import json
 import re
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import ollama
 from tools import TOOLS_MAP, TOOLS_SCHEMA
+
 
 class Modelo:
 
@@ -45,7 +48,6 @@ class Modelo:
             print(f"ERRO! Modelo.pull {e}")
             return False
 
-
     def listar_nome_modelos(self):
         lista = []
         try:
@@ -79,7 +81,7 @@ class Modelo:
         except Exception as e:
             print(f"ERRO! Modelo._show_model_info {e}")
             return {}
-        
+
     def _show_model_info2(self, modelo):
         try:
             if not modelo:
@@ -90,10 +92,10 @@ class Modelo:
         except Exception as e:
             print(f"ERRO! Modelo._show_model_info {e}")
             return {}
-        
+
     def extrair_info_modelo(self, info):
         try:
-         
+
             modelinfo = info.get("modelinfo", {})
             details = info.get("details", {})
             capabilities = info.get("capabilities", [])
@@ -115,8 +117,86 @@ class Modelo:
         except Exception as e:
             print(f"Erro ao extrair info: {e}")
             return {}
-        
 
+    @staticmethod
+    def pegar_valor_por_sufixo(dados, sufixo):
+        if not isinstance(dados, dict):
+            return None
+
+        for chave, valor in dados.items():
+            if str(chave).lower().endswith(str(sufixo).lower()):
+                return valor
+        return None
+
+    @staticmethod
+    def _extrair_tool_call_de_conteudo(content):
+        if not isinstance(content, str):
+            return None
+
+        texto = content.strip()
+        if not texto:
+            return None
+
+        try:
+            payload = json.loads(texto)
+        except Exception:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        name = payload.get("name")
+        args = payload.get("arguments", {})
+        if not isinstance(name, str) or name not in TOOLS_MAP:
+            return None
+        if not isinstance(args, dict):
+            return None
+
+        return {
+            "name": name,
+            "arguments": args,
+        }
+
+    @staticmethod
+    def _normalizar_args_tool(args):
+        if isinstance(args, dict):
+            return args
+        if isinstance(args, str):
+            try:
+                parsed = json.loads(args)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                return {}
+        return {}
+
+    @staticmethod
+    def _extrair_links_de_texto(texto):
+        if not isinstance(texto, str):
+            return []
+        return re.findall(r"https?://[^\s)]+", texto)
+
+    @staticmethod
+    def _url_valida_para_browse(url):
+        if not isinstance(url, str):
+            return False
+
+        valor = url.strip()
+        if not valor:
+            return False
+
+        try:
+            parsed = urlparse(valor)
+            if parsed.scheme not in ("http", "https"):
+                return False
+            if not parsed.netloc:
+                return False
+            host = parsed.netloc.lower()
+            if "example.com" in host:
+                return False
+            return True
+        except Exception:
+            return False
 
     @staticmethod
     def estimar_tokens(texto: str) -> int:
@@ -161,8 +241,6 @@ class Modelo:
             return max(validos)
         return padrao
 
- 
-
     def gerar_embedding(self, texto: str, embedding_model: Optional[str] = None) -> Optional[List[float]]:
         model_name = embedding_model or self.embedding_model
         candidatos = [model_name]
@@ -199,134 +277,192 @@ class Modelo:
         if norma_1 == 0 or norma_2 == 0:
             return -1.0
         return produto / (norma_1 * norma_2)
-    
-    def enviar_mensagem_com_ferramentas(self, mensagem, tools=TOOLS_SCHEMA):
-        try:
-            messages = [
-                {"role": "user", "content": mensagem}
-            ]
 
-            while True:
-                response = ollama.chat(
+    async def enviar_mensagem_com_ferramentas(self, mensagem, tools=TOOLS_SCHEMA):
+        try:
+            messages = [{"role": "user", "content": mensagem}]
+            max_steps = 8
+            steps = 0
+            links_ultima_busca = []
+
+            while steps < max_steps:
+                steps += 1
+
+                response = await ollama.chat(
                     model=self.modelo,
                     messages=messages,
                     tools=tools
                 )
 
                 msg = response["message"]
+                tool_calls = msg.get("tool_calls")
 
-             
-                if "tool_calls" in msg:
+                if not tool_calls:
+                    fallback_tool_call = self._extrair_tool_call_de_conteudo(
+                        msg.get("content"))
+                    if fallback_tool_call:
+                        tool_calls = [{
+                            "id": f"fallback_{steps}",
+                            "function": {
+                                "name": fallback_tool_call["name"],
+                                "arguments": fallback_tool_call["arguments"],
+                            }
+                        }]
+                        msg = {
+                            **msg,
+                            "tool_calls": tool_calls,
+                            "content": "",
+                        }
+
+                if tool_calls:
                     messages.append(msg)
 
-                    for call in msg["tool_calls"]:
+                    for idx, call in enumerate(tool_calls, start=1):
                         name = call["function"]["name"]
-                        args = call["function"]["arguments"]
+                        args = self._normalizar_args_tool(
+                            call["function"].get("arguments", {})
+                        )
+                        tool_call_id = call.get("id", f"call_{steps}_{idx}")
 
                         print(f"[TOOL CALL] {name} -> {args}")
-                        
+                        tool_fn = TOOLS_MAP[name]
+
                         if name == "web_search":
-                            result = TOOLS_MAP[name](**args)
+                            
+
+                            result = await tool_fn(**args)
+                            links_ultima_busca = self._extrair_links_de_texto(
+                                str(result)
+                            )
 
                             messages.append({
                                 "role": "tool",
+                                "tool_call_id": tool_call_id,
                                 "content": str(result)
                             })
 
-                            messages.append({
-                                "role": "user",
-                                "content": "Agora abra um dos links usando browse_page."
-                            })
+                        elif name == "browse_page":
+                            url = str(args.get("url", "")).strip()
+                            if not self._url_valida_para_browse(url):
+                                fallback = next(
+                                    (u for u in links_ultima_busca if self._url_valida_para_browse(u)),
+                                    None,
+                                )
+                                if fallback:
+                                    args["url"] = fallback
+                                    if not args.get("instructions"):
+                                        args["instructions"] = "Extraia os fatos principais relevantes para a pergunta do usuario."
+                                else:
+                                    result = "Erro: URL invalida para browse_page e nenhuma URL valida foi encontrada na ultima busca."
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tool_call_id,
+                                        "content": str(result)
+                                    })
+                                    continue
 
+                            result = await tool_fn(**args)
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call_id,
+                                "content": str(result)
+                            })
                             
-                        
+                        elif name == "generate_diagram":
+                            args["request"] = mensagem
+                            result = await tool_fn(**args)
+
+                            print("[FINAL TOOL RESULT]")
+                            print(result)
+
+                            return result  
+
                         else:
 
-                            result = TOOLS_MAP[name](**args)
+                            result = await tool_fn(**args)
 
                             messages.append({
                                 "role": "tool",
+                                "tool_call_id": tool_call_id,
                                 "content": str(result)
                             })
                     continue
-                             
 
                 return msg["content"]
+            return "Erro: limite de execuções atingido"
 
         except Exception as e:
             print(f"ERRO! {e}")
             return None
 
+    # def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None, tools=TOOLS_SCHEMA):
+    #     if tools:
+    #         return self.enviar_mensagem_com_ferramentas(mensagem, tools=tools)
+    #     try:
+    #         acumulado = ""
+    #         ultima_parte = None
+    #         if not caminho_image:
+    #             resposta = ollama.chat(
+    #                 model=self.modelo,
+    #                 messages=[{'role': 'user', 'content': f'{mensagem}'}],
+    #                 stream=True,
+    #                 tools=tools,
+    #             )
 
-    def enviar_mensagem(self, mensagem, caminho_image=None, on_chunk: Optional[Callable[[str], None]] = None, tools=TOOLS_SCHEMA):
-        if tools:
-            return self.enviar_mensagem_com_ferramentas(mensagem, tools=tools)
-        try:
-            acumulado = ""
-            ultima_parte = None
-            if not caminho_image:
-                resposta = ollama.chat(
-                    model=self.modelo,
-                    messages=[{'role': 'user', 'content': f'{mensagem}'}],
-                    stream=True,
-                    tools=tools,
-                )
-                
-                msg = resposta["message"]
-                if "tool_calls" in msg:
-                    for call in msg["tool_calls"]:
-                        name = call["function"]["name"]
-                        args = call["function"]["arguments"]
+    #             msg = resposta["message"]
+    #             if "tool_calls" in msg:
+    #                 for call in msg["tool_calls"]:
+    #                     name = call["function"]["name"]
+    #                     args = call["function"]["arguments"]
 
-                        print(f"[TOOL CALL] {name} -> {args}")
+    #                     print(f"[TOOL CALL] {name} -> {args}")
 
-                        result = TOOLS_MAP[name](**args)
+    #                     result = TOOLS_MAP[name](**args)
 
+    #                     messages.append(msg)
+    #                     messages.append({
+    #                         "role": "tool",
+    #                         "content": str(result)
+    #                     })
 
-                        messages.append(msg)
-                        messages.append({
-                            "role": "tool",
-                            "content": str(result)
-                        })
+    #                     continue
 
-                        continue
-                
-            else:
-                imagens = caminho_image if isinstance(
-                    caminho_image, list) else [caminho_image]
-                resposta = ollama.chat(
-                    model=self.modelo,
-                    messages=[
-                        {'role': 'user', 'content': f'{mensagem}', 'images': imagens}],
-                    stream=True,
-                    tools=tools,
-                )
+    #         else:
+    #             imagens = caminho_image if isinstance(
+    #                 caminho_image, list) else [caminho_image]
+    #             resposta = ollama.chat(
+    #                 model=self.modelo,
+    #                 messages=[
+    #                     {'role': 'user', 'content': f'{mensagem}', 'images': imagens}],
+    #                 stream=True,
+    #                 tools=tools,
+    #             )
 
-            for parte in resposta:
-                ultima_parte = parte
-                conteudo = ""
+    #         for parte in resposta:
+    #             ultima_parte = parte
+    #             conteudo = ""
 
-                if isinstance(parte, dict):
-                    message = parte.get("message", {})
-                    if isinstance(message, dict):
-                        conteudo = message.get("content", "") or ""
-                else:
-                    message_obj = getattr(parte, "message", None)
-                    if message_obj is not None:
-                        conteudo = getattr(message_obj, "content", "") or ""
+    #             if isinstance(parte, dict):
+    #                 message = parte.get("message", {})
+    #                 if isinstance(message, dict):
+    #                     conteudo = message.get("content", "") or ""
+    #             else:
+    #                 message_obj = getattr(parte, "message", None)
+    #                 if message_obj is not None:
+    #                     conteudo = getattr(message_obj, "content", "") or ""
 
-                if conteudo:
-                    acumulado += conteudo
-                    if on_chunk:
-                        on_chunk(acumulado)
+    #             if conteudo:
+    #                 acumulado += conteudo
+    #                 if on_chunk:
+    #                     on_chunk(acumulado)
 
-            self.ultima_metrica = self._extrair_metricas_ollama(ultima_parte)
+    #         self.ultima_metrica = self._extrair_metricas_ollama(ultima_parte)
 
-            return acumulado
-        except Exception as e:
-            print(f"ERRO! Modelo.enviar_mensagem {e}")
-            self.ultima_metrica = {}
-            return None
+    #         return acumulado
+    #     except Exception as e:
+    #         print(f"ERRO! Modelo.enviar_mensagem {e}")
+    #         self.ultima_metrica = {}
+    #         return None
 
     @staticmethod
     def _extrair_metricas_ollama(parte) -> dict:

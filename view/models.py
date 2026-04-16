@@ -3,7 +3,7 @@ from textual.screen import Screen
 from textual.widgets import Tabs, Tab, ListView, ListItem, Checkbox, Static
 from textual.containers import Grid, Container
 from model.modelo import Modelo
-
+from config import MODEL
 
 class ModelsScreen(Screen):
 
@@ -107,6 +107,7 @@ class ModelsScreen(Screen):
         nome_modelo = item.query_one(
             "#modelo_nome", Static).content.replace("Nome: ", "")
         self.app.modelo.set_modelo(nome_modelo)
+        MODEL = nome_modelo
         item.add_class("modelo-selecionado")
         self.app.notify(f"Modelo '{nome_modelo}' selecionado.")
 

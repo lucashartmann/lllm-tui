@@ -2,15 +2,17 @@ import base64
 import json
 import re
 import time
+import unicodedata
+from datetime import datetime, timedelta
 from typing import Any
+from xml.etree import ElementTree as ET
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
-
+from config import MODEL
 import ollama
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
-import re
-from bs4 import BeautifulSoup
 
 MAX_TEXT_SIZE = 12000
 
@@ -28,10 +30,84 @@ DEFAULT_HEADERS = {
 }
 
 REQUEST_TIMEOUT = 15
-MAX_TEXT_SIZE = 12000
 
-TOOL_MAP = {}
+STOPWORDS = {
+    "a", "o", "as", "os", "de", "do", "da", "dos", "das", "e", "em",
+    "para", "por", "com", "sem", "um", "uma", "no", "na", "nos", "nas",
+    "ao", "aos", "ultimas", "ultimos", "noticias", "sobre", "proximo", "proxima"
+}
 
+
+def _normalize_query(query: str) -> str:
+    text = (query or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _strip_accents(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def _dedupe_results(results: list[dict], amount: int) -> list[dict]:
+    seen_links = set()
+    final = []
+
+    for item in results:
+        link = str(item.get("link", "")).strip()
+        title = str(item.get("title", "")).strip()
+
+        if not link or not title:
+            continue
+
+        link = link.split("#")[0]  # remove âncora
+        link = link.rstrip("/")
+
+        if link in seen_links:
+            continue
+
+        seen_links.add(link)
+
+        final.append({
+            "title": title,
+            "link": link,
+            "snippet": str(item.get("snippet", "")).strip(),
+        })
+
+        if len(final) >= amount:
+            break
+
+    return final
+
+def _tokens_relevantes(query: str) -> list[str]:
+    base = _strip_accents((query or "").lower())
+    tokens = re.findall(r"[a-z0-9]+", base)
+    return [t for t in tokens if len(t) > 2 and t not in STOPWORDS]
+
+
+
+def score_result(item: dict, query_tokens: list[str]) -> float:
+    title = _strip_accents(item.get("title", "").lower())
+    snippet = _strip_accents(item.get("snippet", "").lower())
+
+    score = 0.0
+
+    for tok in query_tokens:
+        if tok in title:
+            score += 3.0  
+
+        if tok in snippet:
+            score += 1.2
+
+    if query_tokens and all(tok in (title + snippet) for tok in query_tokens):
+        score += 3.0
+
+    if len(snippet) < 20:
+        score -= 1.0
+
+    return score
 
 def _clean_text(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -175,8 +251,8 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
     url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
 
     response = _safe_request(url, headers=DEFAULT_HEADERS)
-
     soup = BeautifulSoup(response.text, "html.parser")
+
     results = []
 
     for result in soup.select("div.result"):
@@ -190,13 +266,13 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
         full_link = urljoin("https://duckduckgo.com", raw_link)
         link = _extract_ddg_target(full_link)
 
-        title = title_tag.get_text(strip=True)
-        snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
+        if not link.startswith("http"):
+            continue
 
         results.append({
-            "title": title,
+            "title": title_tag.get_text(strip=True),
             "link": link,
-            "snippet": snippet
+            "snippet": snippet_tag.get_text(strip=True) if snippet_tag else ""
         })
 
         if len(results) >= amount:
@@ -204,16 +280,83 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
 
     return results
 
+def _google_web_results(query: str, amount: int) -> list[dict]:
+    results = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        page.goto(f"https://www.google.com/search?q={quote_plus(query)}")
+        
+        print()
+
+        page.wait_for_selector("div.g", timeout=10000)
+
+        elements = page.query_selector_all("div.g")
+
+        for el in elements:
+            title_el = el.query_selector("h3")
+            link_el = el.query_selector("a")
+
+            if not title_el or not link_el:
+                continue
+
+            title = title_el.inner_text()
+            link = link_el.get_attribute("href")
+
+            snippet_el = el.query_selector("span, div")
+            snippet = snippet_el.inner_text() if snippet_el else ""
+
+            results.append({
+                "title": title,
+                "link": link,
+                "snippet": snippet
+            })
+
+            if len(results) >= amount:
+                break
+
+        browser.close()
+
+    return results
 
 def web_search(query: str, num_results: int = 5) -> str:
-    query = (query or "").strip()
+    query = _normalize_query(query)
     if not query:
         return "Erro: consulta vazia."
 
-    amount = _coerce_amount(num_results)
+    amount = 5
+    print(f"Realizando busca: '{query}' (max {amount} resultados)")
 
     try:
-        results = _duckduckgo_results(query, amount)
+        aggregate = []
+
+        try:
+            aggregate.extend(_google_web_results(query, amount * 2))
+        except Exception as e:
+            print(f"Erro na busca Google: {e}")
+            pass
+
+        print(f"Aggregate results: {len(aggregate)}")
+        if len(aggregate) < amount:
+            try:
+                aggregate.extend(_duckduckgo_results(query, amount))
+            except Exception as e:
+                print(f"Erro na busca DuckDuckGo: {e}")
+                pass
+
+        query_tokens = _tokens_relevantes(query)
+
+        ranked = _dedupe_results(aggregate, amount * 3)
+
+        if query_tokens:
+            ranked.sort(
+                key=lambda item: score_result(item, query_tokens),
+                reverse=True,
+            )
+
+        results = ranked[:amount]
 
         if not results:
             return f"Nenhum resultado encontrado para: {query}"
@@ -225,12 +368,12 @@ def web_search(query: str, num_results: int = 5) -> str:
                 f"  {r['link']}\n"
                 f"  {r['snippet']}\n"
             )
+            print(f"Resultado selecionado: {r['title']} -> {r['link']} (score: {score_result(r, query_tokens)})")
 
         return f"[BUSCA] {query}\n\n" + "\n".join(formatted)
 
     except Exception as e:
         return f"Erro na busca: {e}"
-
 
 
 def search_images(query: str, num_results: int = 5) -> str:
@@ -305,20 +448,6 @@ def search_videos(query: str, num_results: int = 5) -> str:
 
 
 
-def _normalize_tool_args(arguments: Any) -> dict:
-    if isinstance(arguments, dict):
-        return arguments
-
-    if isinstance(arguments, str):
-        try:
-            parsed = json.loads(arguments)
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            pass
-
-    return {}
-
 def _extract_links(text: str) -> list[str]:
     return re.findall(r"https?://\S+", text or "")
 
@@ -355,7 +484,7 @@ def learn_topic(topic: str,
                 payloads.append(base64.b64encode(r.content).decode())
 
             resp = ollama.chat(
-                model=vision_model,
+                model=MODEL,
                 messages=[{
                     "role": "user",
                     "content": f"Explique visualmente: {topic}",

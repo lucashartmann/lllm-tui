@@ -1,4 +1,3 @@
-
 import io
 import os
 from llama_index.llms.ollama import Ollama
@@ -7,8 +6,8 @@ from llama_index.core.agent import ReActAgent
 from view.app import App
 import ollama
 import numpy as np
+from config import MODEL
 
-MODEL = ""
 EMBED_MODEL = "nomic-embed-text"
 
 logs = []

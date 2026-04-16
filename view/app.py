@@ -30,7 +30,7 @@ class App(App):
         "brmodelo_logico": open(CURRENT_DIRECTORY + "brmodelo/logico.md", "r", encoding="utf-8").read(),
     }
 
-    
+    SYSTEM_PROMPT = open("skills/system_prompt.md", "r", encoding="utf-8").read()
 
     SCREENS = {
         "inicio": chat.ChatScreen,
@@ -64,7 +64,7 @@ class App(App):
     def action_sair(self):
         self.notify("Saindo...")
         if self.modelo.modelo:
-            self.modelo.unload_model()
+            self.modelo.descarregar_modelo()
         self.exit()
 
     def on_mount(self):

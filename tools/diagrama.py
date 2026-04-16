@@ -1,15 +1,9 @@
 from pathlib import Path
-from typing import Optional
-
-import io
-import os
-from llama_index.llms.ollama import Ollama
+import uuid
 from llama_index.core.tools import FunctionTool
-from llama_index.core.agent import ReActAgent
-from view.app import App
 import ollama
-import numpy as np
-# import cairosvg
+import cairosvg
+from config import MODEL
 
 SKILLS_ROOT = r"C:\Users\dudua\Music\Projetos\lllm-tui\skills\diagramas"
 
@@ -20,6 +14,7 @@ SKILL_FILES = {
     "uml_sequence": SKILLS_ROOT + "/astah/" + "uml_sequence.md",
     "uml_use_case": SKILLS_ROOT + "/astah/" + "uml_use_case.md",
 }
+
 
 def get_diagram_skill(request: str) -> str:
     text = request.lower()
@@ -41,47 +36,82 @@ def get_diagram_skill(request: str) -> str:
 
     else:
         path = SKILL_FILES["brmodelo_conceitual"]
+        
+    print(f"Skill selecionada: {path}")
 
     return Path(path).read_text(encoding="utf-8")
 
-from llama_index.core.tools import FunctionTool
 
-diagram_skill_tool = FunctionTool.from_defaults(
-    fn=get_diagram_skill,
-    name="get_diagram_skill",
-    description="""
-Use essa função quando o usuário pedir para gerar diagramas,
-como UML, BRModelo, banco de dados, entidade-relacionamento, etc.
-
-Ela retorna instruções (.md) que você deve seguir para gerar um SVG.
-"""
-)
+def svg_to_png(svg: str):
+    filename = f"diagram_{uuid.uuid4().hex}.png"
+    print(f"Convertendo SVG para PNG: {filename}")
+    cairosvg.svg2png(
+        bytestring=svg.encode("utf-8"),
+        write_to=filename
+    )
+    return filename
 
 
-
-# def svg_to_png(svg_content: str, output_path: str = "output.png"):
-#     cairosvg.svg2png(
-#         bytestring=svg_content.encode("utf-8"),
-#         write_to=output_path
-#     )
-#     return output_path
-
-def generate_diagram_svg(request: str, model="llama3") -> str:
+def gerar_diagrama(request: str) -> str:
     skill = get_diagram_skill(request)
 
     system = f"""
-Você é um gerador de SVG.
-Responda APENAS com SVG válido.
+Você é um gerador de diagramas em SVG.
+
+REGRAS:
+- Responda APENAS com SVG puro
+- NÃO use markdown
+- NÃO explique
+- NÃO escreva texto fora do <svg>
+- Comece diretamente com <svg>
 
 {skill}
 """
 
+    print(MODEL)
+
     response = ollama.chat(
-        model=model,
+        model=MODEL,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": request},
         ]
     )
 
-    return response["message"]["content"]
+    content = response["message"]["content"]
+    
+    print("[DIAGRAM TOOL RESPONSE]")
+    print(content)
+
+    # if not content.startswith("<svg"):
+    #     raise ValueError("Modelo não retornou SVG válido")
+
+    if "<svg" in content:
+        path = svg_to_png(content)
+    else:
+        path = None
+        
+    print(f"Diagrama salvo em: {path}")
+
+    return {
+        "svg": content,
+        "png_path": path
+    }
+
+
+diagram_tool = FunctionTool.from_defaults(
+    fn=gerar_diagrama,
+    name="generate_diagram",
+    description="""
+Gera um diagrama em SVG.
+
+- Retorna SVG válido
+- Se necessário, pode ser convertido para PNG
+- NÃO salvar automaticamente em arquivo
+
+Use quando o usuário pedir:
+- UML
+- BRModelo
+- Diagramas
+"""
+)
