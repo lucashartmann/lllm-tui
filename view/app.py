@@ -5,7 +5,6 @@ from database import shelve
 from model.modelo import Modelo
 from textual.color import Color
 from view import chat, config, models, skills
-from tools import arquivo, diagrama, internet
 from util.comandos import comandos_str
 
 class App(App):

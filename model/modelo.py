@@ -16,6 +16,9 @@ class Modelo:
         self.embedding_model = "nomic-embed-text"
         self.ultima_metrica = {}
         self.ultimo_contexto_stats = {}
+        self.temperatura = 0.7
+        self.max_tokens = 262144 
+        self.top_p = 0.9
 
     def set_temperatura(self, valor):
         try:
@@ -324,7 +327,12 @@ class Modelo:
                 response = ollama.chat(
                     model=self.modelo,
                     messages=messages,
-                    tools=tools
+                    tools=tools,
+                    options={
+                        "temperature": self.temperatura,
+                        "max_tokens": self.max_tokens,
+                        "top_p": self.top_p,
+                    },
                 )
 
                 msg = response["message"]

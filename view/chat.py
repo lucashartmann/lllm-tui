@@ -59,16 +59,6 @@ class ChatScreen(Screen):
         super().__init__(name, id, classes)
 
         self.caminhos = []
-        self.nome_bot = self.app.nome_bot
-        self.nome_user = self.app.nome_user
-        self.cor_bot = self.app.cor_bot
-        self.config = f'''
-        Config:
-        - seu nome: {self.app.nome_bot}
-        - nome do user: {self.app.nome_user}
-        Responda usando o idioma da mensagem a seguir:\n
-        '''
-        self.app.modelo = self.app.modelo
 
     BINDINGS = [
         Binding("ctrl+z", "parar", "parar modelo")
@@ -113,7 +103,7 @@ class ChatScreen(Screen):
 
     def _gerar_resposta(self, prompt_inicial) -> str | None:
         resposta = None
-        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.config + "\n" + prompt_inicial
+        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.app.config + "\n" + prompt_inicial
 
         if self.caminhos:
             arquivos = []
