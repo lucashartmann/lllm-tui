@@ -331,45 +331,6 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
 
     return results
 
-def _google_web_results(query: str, amount: int) -> list[dict]:
-    search_url = (
-        "https://www.google.com/search"
-        f"?hl=pt-BR&num={max(10, amount * 2)}&q={quote_plus(query)}"
-    )
-    response = _safe_request(search_url, headers=DEFAULT_HEADERS)
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    results: list[dict] = []
-    containers = soup.select("div.g") or soup.select("div.tF2Cxc")
-
-    for container in containers:
-        title_tag = container.select_one("h3")
-        link_tag = container.select_one("a[href]")
-        snippet_tag = (
-            container.select_one("div.VwiC3b")
-            or container.select_one("span.aCOpRe")
-            or container.select_one("div[data-sncf='1']")
-        )
-
-        if not title_tag or not link_tag:
-            continue
-
-        link = link_tag.get("href", "").strip()
-        if not link.startswith("http"):
-            continue
-
-        results.append({
-            "title": title_tag.get_text(" ", strip=True),
-            "link": link,
-            "snippet": snippet_tag.get_text(" ", strip=True) if snippet_tag else "",
-        })
-
-        if len(results) >= amount:
-            break
-
-    return results
-
-
 def _bing_web_results(query: str, amount: int) -> list[dict]:
     response = _safe_request(
         "https://www.bing.com/search",
@@ -413,12 +374,6 @@ def web_search(query: str, num_results: int = 5) -> str:
 
     try:
         aggregate = []
-
-        try:
-            aggregate.extend(_google_web_results(query, amount * 2))
-        except Exception as e:
-            print(f"Erro na busca Google: {e}")
-            pass
 
         if len(aggregate) < amount:
             try:

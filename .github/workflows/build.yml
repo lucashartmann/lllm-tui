@@ -21,15 +21,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r src/requirements.txt --use-deprecated=legacy-resolver
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --use-deprecated=legacy-resolver
           pip install pyinstaller
 
       - name: Build executable with PyInstaller
         run: |
           pyinstaller --onedir `
             --collect-all rich `
+            --collect-all textual `
+            --collect-all llama_index `
+            --exclude-module nltk `
+            --exclude-module scipy `
             --name "Ollama TUI" `
-            --add-data "style.tcss;." `
+            --add-data "view/css;." `
             --additional-hooks-dir "./config/" `
             main.py
 

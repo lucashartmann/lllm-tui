@@ -3,5 +3,6 @@ textual-colorpicker
 ollama
 docling
 textual-diff-view
+llama-index-core
 llama-index-llms-ollama
 CairoSVG
