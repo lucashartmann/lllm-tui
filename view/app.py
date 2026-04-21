@@ -1,16 +1,17 @@
 from textual import events
 from textual.app import App
 from textual.binding import Binding
+from database import shelve
 from model.modelo import Modelo
 from textual.color import Color
 from view import chat, config, models, skills
 from tools import arquivo, diagrama, internet
-
+from util.comandos import comandos_str
 
 class App(App):
 
     modelo = Modelo()
-
+    comandos = str(comandos_str)
     caminhos = list()
     nome_bot = "bot"
     nome_user = None
@@ -68,4 +69,7 @@ class App(App):
         self.exit()
 
     def on_mount(self):
+        if shelve.carregar_modelo():
+            self.modelo.modelo = shelve.carregar_modelo()
+            print(f"Modelo carregado do shelve: {self.modelo.modelo}")
         self.push_screen("inicio")

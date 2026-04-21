@@ -1,118 +1,157 @@
-
-#vg_botoes {
+ChatScreen #vg_botoes {
     border: none;
+    Button{
+        margin: 0;  
+        height: 60%;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+        border: tall 10% black;   
+    }
 }
 
-#vg_botoes Button{
-    margin: 0;  
-    height: 60%;
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    border: tall 10% black;   
+ChatScreen {
+    layers: below above;
+    
 }
 
-Select { 
+ChatScreen ContainerComandos {
+    layer: above;
+    max-height: 40%;
+    min-height: 20%;
+    color: black;
+    max-width: 100%;
+    min-width: 92%;
+    width: auto;
+    height: auto;
+    margin-right: 130;
+    margin-top: 10;
+    border: solid 30% black;
+    Static {
+        color: black;
+        margin: 1;
+    }
+    .focused {
+        border: solid 30% red;
+    }
+    scrollbar-size: 2 1;
+}
+
+ChatScreen Select { 
     width: 22%;
 }
 
 
-#hg_arquivos {
+ChatScreen #hg_arquivos {
     width: 100%;
     background: black 50%;
     height: auto;
     margin: 0 2 1 2;
     overflow: auto auto;
+    layer: below;
+    Static {
+        width: auto;
+        height: auto;
+        border: 10% black;
+        &:hover {
+            background: red 20%;
+        }
+    } 
 }
 
-#hg_arquivos Static {
-    width: auto;
-    height: auto;
-    border: 10% black;
-}
-
-#hg_arquivos Static:hover {
-    background: red 20%;
-}
-
-#data {
+ChatScreen #data {
     dock: bottom;
     width: 100%;
     height: 5%;
     background: black 50%;
     content-align: center middle;
     align: center middle;
+    Static {
+        width: auto;
+        height: auto;
+        color: black;
+        text-align: center;
+    }
 }
 
-#data Static {
-    width: auto;
-    height: auto;
-    color: black;
-    text-align: center;
-}
-
-#hg_editar_arquivos {
+ChatScreen #hg_editar_arquivos {
     content-align: center middle;
     margin-left: 2;
+    Static{
+        color: black;
+        margin-bottom: 1;
+    }
 }
 
-#hg_editar_arquivos Static{
-    color: black;
-    margin-bottom: 1;
-}
-
-#bot {
-    background: black 25%;
+ChatScreen #bot {
+    background: #f8f8f89a;
     margin: 2;
     border:  tall 40% black;
+    scrollbar-background: rgba(56, 33, 33, 0.75);
+    scrollbar-color: black;
+    scrollbar-size: 2 1;
+    layer: below;
+    VerticalGroup Static{
+        border: none;
+        margin: 0 2 2 3;
+    }
+    .user {
+            text-align: right;
+            margin-bottom: 1;
+            border: 5% black;
+            margin: 0 2 1 2;
+            color: black;
+    }
+    Static {
+            margin: 0 2 1 2;
+            border: 5% black;
+            width: 100%;
+            color: #333333 ;
+    }
+    .stt_resposta_bot {
+        margin: 0 2 0 2;
+        border: 5% black;
+        width: 100%;
+        color: black;
+    }
+    VerticalGroup {
+        width: 100%;
+        height: auto;
+    }
 }
 
-#bot .user {
-    text-align: right;
-    margin-bottom: 1;
-    border: 5% black;
-    margin: 0 2 1 2;
-    color: black;
-}
 
-#bot Static {
-    margin: 0 2 1 2;
-    border: 5% black;
-    width: 100%;
-    color: black;
-}
-
-#hg_bot {
+ChatScreen #hg_bot {
     height: 90%;
     margin: 2;
 }
 
-#hg_user {
+ChatScreen #hg_user {
     height: 20%;
     dock: bottom;
     margin: 0 2 3 2;
     width: 100%;
     content-align: center middle;
+    layer: below;
     # border:  tall 10% black;
 }
 
-VerticalGroup {
+ChatScreen VerticalGroup {
     height: 100%;
     width: 8%;
 }
 
-#h_top {
+ChatScreen #h_top {
     margin: 1 2 0 2;
     height: auto;
+    Input{
+        width: auto;
+        min-width: 20%;
+    }
 }
 
-#h_top Input{
-  width: auto;
-  min-width: 20%;
-}
 
-
-App.tamanho-34 {
+ChatScreen App.tamanho-34 {
     #user {
         width: 50%;
     }
@@ -130,7 +169,7 @@ App.tamanho-34 {
     }
 }
 
-App.tamanho-64 {
+ChatScreen App.tamanho-64 {
     #user {
         width: 67%;
     }
@@ -148,7 +187,7 @@ App.tamanho-64 {
     }
 }
 
-App.tamanho-98 {
+ChatScreen App.tamanho-98 {
     #user {
         width: 72%;
     }
@@ -166,34 +205,19 @@ App.tamanho-98 {
     }
 }
 
-#bot VerticalGroup Static{
-    border: none;
-    margin: 0 2 2 3;
-}
-
-#bot .stt_resposta_bot {
-    margin: 0 2 0 2;
-    border: 5% black;
-    width: 100%;
-    color: black;
-}
-
-#bot VerticalGroup {
-    width: 100%;
-    height: auto;
-}
-
-#recarregar {
+ChatScreen #recarregar {
     width: 3%;
     min-width: 0;
+    layer: below;
 }
 
 
-DiffScreen {
+ChatScreen DiffScreen {
     align: center middle;
+    layer: below;
 }
 
-#dialog {
+ChatScreen #dialog {
     padding: 0 1;
     width: 90%;
     height: 90%;
@@ -202,20 +226,26 @@ DiffScreen {
     align: center middle;
     text-align: center;
     content-align: center middle;
+    layer: below;
+    #diff-container {
+        width: 2000;
+        height: 200;
+        background: black 70%;
+        layer: below;
+    }
 }
 
-
-#dialog #diff-container {
-    width: 2000;
-    height: 200;
-    background: black 70%;
-}
-
-DiffScreen Header {
+ChatScreen DiffScreen Header {
     height: 7%;
+    layer: below;
 }
 
-.stt_diff_bot {
+ChatScreen .stt_diff_bot {
+    layer: below;
     margin: 2;
     background: rgba(89, 39, 39, 0.71);
+}
+
+ChatScreen Tabs {
+    layer: below;
 }

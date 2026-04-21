@@ -5,3 +5,4 @@ build/
 dist/
 teste.py
 .continue/
+data/

@@ -5,7 +5,6 @@ from textual.widgets import Button, Input, Select, Tabs, Tab, Footer, MaskedInpu
 from tools import diagrama, internet
 from textual_colorpicker import ColorPicker
 
-
 class ConfigScreen(Screen):
 
     CSS_PATH = ["css/base.tcss", "css/config.tcss"]
@@ -57,6 +56,7 @@ class ConfigScreen(Screen):
         if self.app.modelo.modelo:
             self.app.modelo.unload_model()
         self.app.modelo.set_modelo(self.query_one(Select).value)
+        MODEL = self.app.modelo.modelo
 
     def on_input_changed(self, evento: Input.Changed):
         if evento.input.id == "input_nome_bot":

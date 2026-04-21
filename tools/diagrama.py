@@ -1,9 +1,11 @@
 from pathlib import Path
 import uuid
+import re
 from llama_index.core.tools import FunctionTool
 import ollama
 import cairosvg
-from config import MODEL
+from typing import Optional
+from database import shelve
 
 SKILLS_ROOT = r"C:\Users\dudua\Music\Projetos\lllm-tui\skills\diagramas"
 
@@ -52,7 +54,43 @@ def svg_to_png(svg: str):
     return filename
 
 
-def gerar_diagrama(request: str) -> str:
+def _sanitize_svg_output(content: str) -> str:
+    text = (content or "").strip()
+
+    fence_match = re.search(r"```(?:svg)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    svg_match = re.search(r"<svg\b.*?</svg>", text, flags=re.IGNORECASE | re.DOTALL)
+    if svg_match:
+        text = svg_match.group(0).strip()
+
+    return text
+
+
+def _resolve_model(model: Optional[str] = None) -> str:
+    candidate = (model or "").strip() 
+    if candidate:
+        return candidate
+
+    try:
+        listed = ollama.list()
+        models = getattr(listed, "models", [])
+        if models:
+            first = getattr(models[0], "model", "")
+            if first:
+                return first
+    except Exception:
+        pass
+
+    raise ValueError("Nenhum modelo Ollama configurado para gerar diagrama")
+
+
+def gerar_diagrama(request: str, model: Optional[str] = None) -> str:
+    if shelve.carregar_modelo():
+        model_name = shelve.carregar_modelo()
+    else:
+        model_name = _resolve_model(model)
     skill = get_diagram_skill(request)
 
     system = f"""
@@ -64,32 +102,32 @@ REGRAS:
 - NÃO explique
 - NÃO escreva texto fora do <svg>
 - Comece diretamente com <svg>
+- NUNCA envolva a resposta em ``` ou ```svg
+- NUNCA inclua texto antes ou depois do SVG
+- NUNCA retorne comentários, explicações ou blocos de código markdown
 
 {skill}
 """
 
-    print(MODEL)
+    print(f"gerar_diagrama - MODEL: {model_name}")
 
     response = ollama.chat(
-        model=MODEL,
+        model=model_name,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": request},
         ]
     )
 
-    content = response["message"]["content"]
+    content = _sanitize_svg_output(response["message"]["content"])
     
     print("[DIAGRAM TOOL RESPONSE]")
     print(content)
 
-    # if not content.startswith("<svg"):
-    #     raise ValueError("Modelo não retornou SVG válido")
-
-    if "<svg" in content:
+    if content.startswith("<svg") and content.endswith("</svg>"):
         path = svg_to_png(content)
     else:
-        path = None
+        raise ValueError("Modelo não retornou um SVG valido")
         
     print(f"Diagrama salvo em: {path}")
 

@@ -3,10 +3,10 @@ import os
 from llama_index.llms.ollama import Ollama
 from llama_index.core.tools import FunctionTool
 from llama_index.core.agent import ReActAgent
+from database import shelve
 from view.app import App
 import ollama
 import numpy as np
-from config import MODEL
 
 EMBED_MODEL = "nomic-embed-text"
 
@@ -79,9 +79,14 @@ def summarize_folder(folder):
     top_chunks = find_relevant(all_chunks, "resuma o conteúdo geral", top_k=8)
 
     context = "\n\n".join([c["chunk"] for c in top_chunks])
+    
+    if shelve.carregar_modelo():
+        model_name = shelve.carregar_modelo()
+    else:
+        return "Nenhum modelo configurado para sumarização."
 
     response = ollama.chat(
-        model=MODEL,
+        model=model_name,
         messages=[{
             "role": "user",
             "content": f"Faça um resumo geral dos arquivos:\n\n{context}"
@@ -104,8 +109,13 @@ CONTEÚDO:
 Retorne APENAS o conteúdo atualizado.
 """
 
+    if shelve.carregar_modelo():
+        model_name = shelve.carregar_modelo()
+    else:
+        return "Nenhum modelo configurado para sumarização."
+
     response = ollama.chat(
-        model=MODEL,
+        model=model_name,
         messages=[{"role": "user", "content": prompt}]
     )
     

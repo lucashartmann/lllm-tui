@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from typing import Any
 from xml.etree import ElementTree as ET
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
-from config import MODEL
 import ollama
 import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+
+from database import shelve
 
 
 MAX_TEXT_SIZE = 12000
@@ -22,11 +22,7 @@ BLACKLIST = [
 ]
 
 DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36"
-    ),
-    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+    "User-Agent": "Mozilla/5.0",
 }
 
 REQUEST_TIMEOUT = 15
@@ -176,6 +172,7 @@ def browse_page(url: str, instructions: str = "") -> str:
 
     try:
         response = requests.get(url, headers=headers, timeout=15)
+        print(f"browse_page: Acessando página: {url} (status {response.status_code})")
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -247,22 +244,76 @@ def _extract_ddg_target(link: str) -> str:
     return unquote(target) if target else link
 
 
+def _extract_bing_target(link: str) -> str:
+    parsed = urlparse(link)
+    if "bing.com" not in parsed.netloc or not parsed.path.startswith("/ck/"):
+        return link
+
+    params = parse_qs(parsed.query)
+    encoded = params.get("u", [""])[0]
+    if not encoded:
+        return link
+
+    
+    if encoded.startswith("a1"):
+        encoded = encoded[2:]
+
+    try:
+        padding = "=" * ((4 - len(encoded) % 4) % 4)
+        decoded = base64.urlsafe_b64decode(encoded + padding).decode("utf-8", errors="ignore")
+        if decoded.startswith("http"):
+            return decoded
+    except Exception:
+        pass
+
+    return link
+
+
 def _duckduckgo_results(query: str, amount: int) -> list[dict]:
-    url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    def _collect_from_html(html: str, limit: int) -> list[dict]:
+        soup_local = BeautifulSoup(html, "html.parser")
+        collected: list[dict] = []
 
-    response = _safe_request(url, headers=DEFAULT_HEADERS)
-    soup = BeautifulSoup(response.text, "html.parser")
+        cards = soup_local.select("div.result") or soup_local.select("article")
+        for card in cards:
+            title_tag = card.select_one("a.result__a") or card.select_one("a[data-testid='result-title-a']")
+            snippet_tag = card.select_one(".result__snippet") or card.select_one(".snippet")
 
-    results = []
+            if not title_tag:
+                continue
 
-    for result in soup.select("div.result"):
-        title_tag = result.select_one("a.result__a")
-        snippet_tag = result.select_one(".result__snippet")
+            raw_link = title_tag.get("href", "")
+            full_link = urljoin("https://duckduckgo.com", raw_link)
+            link = _extract_ddg_target(full_link)
 
-        if not title_tag:
-            continue
+            if not link.startswith("http"):
+                continue
 
-        raw_link = title_tag.get("href", "")
+            collected.append({
+                "title": title_tag.get_text(strip=True),
+                "link": link,
+                "snippet": snippet_tag.get_text(strip=True) if snippet_tag else "",
+            })
+
+            if len(collected) >= limit:
+                break
+
+        return collected
+
+    html_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+    response = _safe_request(html_url, headers=DEFAULT_HEADERS)
+    results = _collect_from_html(response.text, amount)
+
+    if len(results) >= amount:
+        return results
+
+    
+    lite_url = f"https://lite.duckduckgo.com/lite/?q={quote_plus(query)}"
+    lite_response = _safe_request(lite_url, headers=DEFAULT_HEADERS)
+    lite_soup = BeautifulSoup(lite_response.text, "html.parser")
+
+    for anchor in lite_soup.select("a.result-link"):
+        raw_link = anchor.get("href", "")
         full_link = urljoin("https://duckduckgo.com", raw_link)
         link = _extract_ddg_target(full_link)
 
@@ -270,9 +321,9 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
             continue
 
         results.append({
-            "title": title_tag.get_text(strip=True),
+            "title": anchor.get_text(strip=True),
             "link": link,
-            "snippet": snippet_tag.get_text(strip=True) if snippet_tag else ""
+            "snippet": "",
         })
 
         if len(results) >= amount:
@@ -281,43 +332,74 @@ def _duckduckgo_results(query: str, amount: int) -> list[dict]:
     return results
 
 def _google_web_results(query: str, amount: int) -> list[dict]:
-    results = []
+    search_url = (
+        "https://www.google.com/search"
+        f"?hl=pt-BR&num={max(10, amount * 2)}&q={quote_plus(query)}"
+    )
+    response = _safe_request(search_url, headers=DEFAULT_HEADERS)
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+    results: list[dict] = []
+    containers = soup.select("div.g") or soup.select("div.tF2Cxc")
 
-        page.goto(f"https://www.google.com/search?q={quote_plus(query)}")
-        
-        print()
+    for container in containers:
+        title_tag = container.select_one("h3")
+        link_tag = container.select_one("a[href]")
+        snippet_tag = (
+            container.select_one("div.VwiC3b")
+            or container.select_one("span.aCOpRe")
+            or container.select_one("div[data-sncf='1']")
+        )
 
-        page.wait_for_selector("div.g", timeout=10000)
+        if not title_tag or not link_tag:
+            continue
 
-        elements = page.query_selector_all("div.g")
+        link = link_tag.get("href", "").strip()
+        if not link.startswith("http"):
+            continue
 
-        for el in elements:
-            title_el = el.query_selector("h3")
-            link_el = el.query_selector("a")
+        results.append({
+            "title": title_tag.get_text(" ", strip=True),
+            "link": link,
+            "snippet": snippet_tag.get_text(" ", strip=True) if snippet_tag else "",
+        })
 
-            if not title_el or not link_el:
-                continue
+        if len(results) >= amount:
+            break
 
-            title = title_el.inner_text()
-            link = link_el.get_attribute("href")
+    return results
 
-            snippet_el = el.query_selector("span, div")
-            snippet = snippet_el.inner_text() if snippet_el else ""
 
-            results.append({
-                "title": title,
-                "link": link,
-                "snippet": snippet
-            })
+def _bing_web_results(query: str, amount: int) -> list[dict]:
+    response = _safe_request(
+        "https://www.bing.com/search",
+        headers=DEFAULT_HEADERS,
+        params={"q": query, "setlang": "pt-BR"},
+    )
+    soup = BeautifulSoup(response.text, "html.parser")
 
-            if len(results) >= amount:
-                break
+    results: list[dict] = []
+    for card in soup.select("li.b_algo"):
+        link_tag = card.select_one("h2 a[href]")
+        title_tag = card.select_one("h2")
+        snippet_tag = card.select_one(".b_caption p") or card.select_one("p")
 
-        browser.close()
+        if not link_tag or not title_tag:
+            continue
+
+        raw_link = link_tag.get("href", "").strip()
+        link = _extract_bing_target(raw_link)
+        if not link.startswith("http"):
+            continue
+
+        results.append({
+            "title": title_tag.get_text(" ", strip=True),
+            "link": link,
+            "snippet": snippet_tag.get_text(" ", strip=True) if snippet_tag else "",
+        })
+
+        if len(results) >= amount:
+            break
 
     return results
 
@@ -326,8 +408,8 @@ def web_search(query: str, num_results: int = 5) -> str:
     if not query:
         return "Erro: consulta vazia."
 
-    amount = 5
-    print(f"Realizando busca: '{query}' (max {amount} resultados)")
+    amount = _coerce_amount(num_results)
+    print(f"Realizando busca na web por: {query} (max {amount} resultados)")
 
     try:
         aggregate = []
@@ -338,7 +420,13 @@ def web_search(query: str, num_results: int = 5) -> str:
             print(f"Erro na busca Google: {e}")
             pass
 
-        print(f"Aggregate results: {len(aggregate)}")
+        if len(aggregate) < amount:
+            try:
+                aggregate.extend(_bing_web_results(query, amount * 2))
+            except Exception as e:
+                print(f"Erro na busca Bing: {e}")
+                pass
+
         if len(aggregate) < amount:
             try:
                 aggregate.extend(_duckduckgo_results(query, amount))
@@ -368,7 +456,7 @@ def web_search(query: str, num_results: int = 5) -> str:
                 f"  {r['link']}\n"
                 f"  {r['snippet']}\n"
             )
-            print(f"Resultado selecionado: {r['title']} -> {r['link']} (score: {score_result(r, query_tokens)})")
+            print(f"Resultado: {r['title']} ({r['link']})")
 
         return f"[BUSCA] {query}\n\n" + "\n".join(formatted)
 
@@ -483,8 +571,13 @@ def learn_topic(topic: str,
                 r = requests.get(url, timeout=10)
                 payloads.append(base64.b64encode(r.content).decode())
 
+            if shelve.carregar_modelo():
+                model_name = shelve.carregar_modelo()
+            else:
+                return "Nenhum modelo configurado para sumarização."
+
             resp = ollama.chat(
-                model=MODEL,
+                model=model_name,
                 messages=[{
                     "role": "user",
                     "content": f"Explique visualmente: {topic}",

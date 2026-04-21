@@ -42,6 +42,13 @@ Se faltar informacao, assumir valores razoaveis e continuar.
 
 Evite cruzamento de linhas desnecessario.
 
+Layout padrao recomendado para diagramas simples:
+- Use uma grade horizontal em 3 colunas para entidades principais.
+- Centralize o relacionamento entre as entidades do meio.
+- Coloque atributos abaixo de cada entidade, com espacamento vertical suficiente.
+- Nao sobreponha textos, circulos, retangulos ou losangos.
+- Nao compacte os elementos no topo da tela; deixe respiro visual.
+
 Tamanho e limites:
 - Canvas fixo: viewBox="0 0 680 H"
 - Area segura: x = 20..660, y = 20..(H-20)
@@ -60,6 +67,12 @@ Regras globais:
 - Todo `<text>` deve ter x, y, text-anchor e dominant-baseline="central".
 - Toda linha/path usada como conector deve ter `fill="none"`.
 - Preto e branco apenas: sem paleta colorida.
+- Gere um SVG limpo, legivel e com distribuicao visual equilibrada.
+- Nao use coordenadas muito proximas entre si; deixe espacamento horizontal e vertical consistente.
+- Nao coloque mais de uma entidade em linhas que se toquem visualmente.
+- Nao envolva a resposta em blocos markdown como ```svg.
+- Nao escreva qualquer texto antes ou depois do SVG.
+- Nao inclua comentarios fora do proprio SVG.
 
 ---
 
@@ -145,6 +158,7 @@ Padrao de cardinalidade:
 - [ ] Linhas conectam bordas, sem atravessar formas indevidamente.
 - [ ] Cardinalidades presentes e legiveis.
 - [ ] Nenhum elemento fora da area segura.
+- [ ] Nenhum elemento esta sobreposto ou colado demais.
 - [ ] Saida final contem somente o SVG.
 
 ---

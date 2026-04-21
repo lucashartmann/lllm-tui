@@ -3,8 +3,7 @@ from textual.screen import Screen
 from textual.widgets import Tabs, Tab, ListView, ListItem, Checkbox, Static
 from textual.containers import Grid, Container
 from model.modelo import Modelo
-from config import MODEL
-
+from database import shelve
 class ModelsScreen(Screen):
 
     CSS_PATH = ["css/base.tcss", "css/models.tcss"]
@@ -18,7 +17,7 @@ class ModelsScreen(Screen):
                 info = self.modelo._show_model_info2(modelo)
                 info["name"] = modelo
                 detalhes.append(info)
-                print(info)
+                # print(info)
 
         if detalhes != self.modelos and detalhes:
             self.modelos = detalhes
@@ -107,7 +106,7 @@ class ModelsScreen(Screen):
         nome_modelo = item.query_one(
             "#modelo_nome", Static).content.replace("Nome: ", "")
         self.app.modelo.set_modelo(nome_modelo)
-        MODEL = nome_modelo
+        shelve.salvar_modelo(nome_modelo)
         item.add_class("modelo-selecionado")
         self.app.notify(f"Modelo '{nome_modelo}' selecionado.")
 

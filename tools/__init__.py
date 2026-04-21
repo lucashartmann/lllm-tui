@@ -1,4 +1,4 @@
-from tools import arquivo, diagrama, internet, banco
+from tools import arquivo, diagrama, internet, banco, chamar_ai
 
 TOOLS_MAP = {
     "web_search": internet.web_search,
@@ -11,9 +11,25 @@ TOOLS_MAP = {
     "write_file": arquivo.write_file,
     "salvar_no_banco": banco.salvar_no_banco,
     "pesquisar_no_banco": banco.pesquisar_no_banco,
+    "chamar_ai": chamar_ai.chamar_ai,
 }
 
 TOOLS_SCHEMA = [
+    {
+      "type": "function",
+      "function": {
+        "name": "chamar_ai",
+        "description": "Chama outra inteligência artificial para responder a uma pergunta",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "mensagem": {"type": "string"},
+            "model": {"type": "string"}
+          },
+          "required": ["mensagem"]
+        }
+      }
+    },
     {
         "type": "function",
         "function": {
@@ -169,10 +185,6 @@ TOOLS_SCHEMA = [
                             "type": "string",
                             "description": "A consulta de busca"
                         },
-                        "num_results": {
-                            "type": "integer",
-                            "description": "O número de resultados a serem retornados"
-                        }
                     },
                     "required": ["query"]
                 }

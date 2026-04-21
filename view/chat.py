@@ -1,9 +1,10 @@
 from textual import events
+import asyncio
 from textual.screen import Screen, ModalScreen
 from textual.widgets import TextArea, Select, Button, Static, Switch, Footer, Input, Tab, Tabs
 from textual.containers import HorizontalGroup, VerticalGroup, VerticalScroll, Center
 from textual.binding import Binding
-from model import  modelo
+from model import modelo
 import time
 from textual_diff_view import DiffView, LoadError
 from textual.app import App, ComposeResult
@@ -16,6 +17,7 @@ from pathlib import Path
 from textual.containers import Horizontal
 from util.selecionar_arquivo import selecionar_arquivo
 from tools import arquivo, diagrama, internet
+from view.widgets.container_comandos import ContainerComandos
 
 
 class DiffScreen(ModalScreen):
@@ -109,9 +111,9 @@ class ChatScreen(Screen):
         # yield HorizontalScroll(id="data")
         yield Footer(show_command_palette=False)
 
-    async def processamento(self, prompt_inicial) -> None:
+    def _gerar_resposta(self, prompt_inicial) -> str | None:
         resposta = None
-        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.config + "\n" +  prompt_inicial
+        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.config + "\n" + prompt_inicial
 
         if self.caminhos:
             arquivos = []
@@ -154,30 +156,35 @@ class ChatScreen(Screen):
                     mensagem)
 
         else:
-            resposta = self.app.modelo.enviar_mensagem_com_ferramentas(mensagem)
+            resposta = self.app.modelo.enviar_mensagem_com_ferramentas(
+                mensagem)
+
+        return resposta
+
+    async def processamento(self, prompt_inicial) -> None:
+        resposta = await asyncio.to_thread(self._gerar_resposta, prompt_inicial)
+        await self.parar_animacao()
 
         print(resposta)
         if resposta:
-            async def update_ui():
-                await self.parar_animacao()
-                bot_container = self.query_one(
-                    "#bot", VerticalScroll)
-                try:
-                    widget = bot_container.query_one(".stt_pensando", Static)
-                    widget.remove_class("stt_pensando")
-                    widget.update(
+            bot_container = self.query_one(
+                "#bot", VerticalScroll)
+            try:
+                widget = bot_container.query_one(".stt_pensando", Static)
+                widget.remove_class("stt_pensando")
+                widget.update(
+                    f"[{self.app.cor_bot.hex}]{self.app.nome_bot}[/]: {resposta}")
+            except:
+                bot_container.mount(
+                    Static(
                         f"[{self.app.cor_bot.hex}]{self.app.nome_bot}[/]: {resposta}")
-                except:
-                    bot_container.mount(
-                        Static(
-                            f"[{self.app.cor_bot.hex}]{self.app.nome_bot}[/]: {resposta}")
-                    )
-                bot_container.scroll_end(animate=False)
-            self.app.call_from_thread(update_ui)
+                )
+            bot_container.scroll_end(animate=False)
 
     async def parar_animacao(self):
         self.carregando_mensagem = False
-        self._loading_timer.stop()
+        if hasattr(self, "_loading_timer") and self._loading_timer is not None:
+            self._loading_timer.stop()
 
     async def animate_loading(self):
         bot_container = self.query_one("#bot", VerticalScroll)
@@ -194,9 +201,70 @@ class ChatScreen(Screen):
             f"[{self.app.cor_bot.hex}]{self.app.nome_bot}[/]: {frames[self._frame_index % len(frames)]}")
         self._frame_index += 1
 
+    def comandos(self, prompt_inicial):
+        comando = prompt_inicial.split()[0][1:]
+        argumento = " ".join(prompt_inicial.split()[1:])
+
+        if comando in ["modelo", "model"]:
+            self.app.modelo.set_modelo(argumento)
+            self.notify(f"Modelo {argumento} carregado com sucesso!")
+
+        elif comando in ["listar_modelos", "list_models"]:
+            modelos_disponiveis = self.app.modelo.listar_modelos()
+            self.notify("Modelos disponíveis:\n" +
+                        "\n".join(modelos_disponiveis))
+
+        elif comando in ["ajuda", "help"]:
+            self.notify(self.app.comandos)
+
+        elif comando in ["novo", "new"]:
+            self.query_one("#bot", VerticalScroll).clear()
+            self.caminhos = []
+            self.notify("Nova conversa iniciada!")
+
+        elif comando in ["temperatura"]:
+            try:
+                valor = float(argumento)
+                if self.app.modelo.set_temperatura(valor):
+                    self.notify(f"Temperatura ajustada para {valor}")
+                else:
+                    self.notify(
+                        "Valor inválido para temperatura. Use um número entre 0.0 e 2.0 (ex: /temperatura 0.7)")
+            except ValueError:
+                self.notify(
+                    "Valor inválido para temperatura. Use um número (ex: /temperatura 0.7)")
+
+        elif comando in ["max_tokens"]:
+            try:
+                valor = int(argumento)
+                if self.app.modelo.set_max_tokens(valor):
+                    self.notify(f"Max tokens ajustado para {valor}")
+                else:
+                    self.notify(
+                        "Valor inválido para max tokens. Use um número inteiro (ex: /max_tokens 150)")
+            except ValueError:
+                self.notify(
+                    "Valor inválido para max tokens. Use um número inteiro (ex: /max_tokens 150)")
+
+        elif comando in ["top_p"]:
+            try:
+                valor = float(argumento)
+                if self.app.modelo.set_top_p(valor):
+                    self.notify(f"Top_p ajustado para {valor}")
+                else:
+                    self.notify(
+                        "Valor inválido para top_p. Use um número entre 0.0 e 1.0 (ex: /top_p 0.9)")
+            except ValueError:
+                self.notify(
+                    "Valor inválido para top_p. Use um número (ex: /top_p 0.9)")
+
     async def on_button_pressed(self, evento: Button.Pressed):
         if self.app.modelo.modelo and evento.button.id == "enviar":
             prompt_inicial = self.query_one("#user").text
+
+            if prompt_inicial.lower().startswith("/"):
+                self.comandos(prompt_inicial)
+                return
 
             await self.query_one("#bot", VerticalScroll).mount(
                 Static(prompt_inicial, classes="user"))
@@ -210,7 +278,6 @@ class ChatScreen(Screen):
             self.run_worker(
                 self.processamento(prompt_inicial),
                 name="AI pensando",
-                thread=True,
                 exclusive=True,
             )
 
@@ -246,3 +313,28 @@ class ChatScreen(Screen):
         if self.app.modelo.modelo:
             self.app.modelo.unload_model()
         self.app.modelo.set_modelo(self.query_one(Select).value)
+
+    def on_text_area_changed(self, event: TextArea.Changed):
+        if event.text_area.text.startswith("/"):
+            container = ContainerComandos()
+            print(event.text_area.text[0:])
+            novo_comandos = ""
+            for comando in self.app.comandos.split("\n"):
+                if comando.startswith(event.text_area.text[0:]):
+                    novo_comandos += comando + "\n"
+
+            if novo_comandos:
+                container = ContainerComandos()
+                try:
+                    container = self.query_one(ContainerComandos)
+                except:
+                    self.mount(container, after=self.query_one("#hg_arquivos"))
+
+                container.atualizar_comandos(novo_comandos.split("\n"))
+
+        else:
+            try:
+                container = self.query_one(ContainerComandos)
+                container.remove()
+            except:
+                pass

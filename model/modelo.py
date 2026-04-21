@@ -17,6 +17,39 @@ class Modelo:
         self.ultima_metrica = {}
         self.ultimo_contexto_stats = {}
 
+    def set_temperatura(self, valor):
+        try:
+            valor_float = float(valor)
+            if 0.0 <= valor_float <= 2.0:
+                self.temperatura = valor_float
+                return True
+            else:
+                return False
+        except ValueError:
+            return False
+
+    def set_max_tokens(self, valor):
+        try:
+            valor_int = int(valor)
+            if valor_int > 0:
+                self.max_tokens = valor_int
+                return True
+            else:
+                return False
+        except ValueError:
+            return False
+
+    def set_top_p(self, valor):
+        try:
+            valor_float = float(valor)
+            if 0.0 <= valor_float <= 1.0:
+                self.top_p = valor_float
+                return True
+            else:
+                return False
+        except ValueError:
+            return False
+
     def set_modelo(self, modelo):
         self.modelo = modelo
 
@@ -278,7 +311,7 @@ class Modelo:
             return -1.0
         return produto / (norma_1 * norma_2)
 
-    async def enviar_mensagem_com_ferramentas(self, mensagem, tools=TOOLS_SCHEMA):
+    def enviar_mensagem_com_ferramentas(self, mensagem, tools=TOOLS_SCHEMA):
         try:
             messages = [{"role": "user", "content": mensagem}]
             max_steps = 8
@@ -288,7 +321,7 @@ class Modelo:
             while steps < max_steps:
                 steps += 1
 
-                response = await ollama.chat(
+                response = ollama.chat(
                     model=self.modelo,
                     messages=messages,
                     tools=tools
@@ -328,9 +361,8 @@ class Modelo:
                         tool_fn = TOOLS_MAP[name]
 
                         if name == "web_search":
-                            
 
-                            result = await tool_fn(**args)
+                            result = tool_fn(**args)
                             links_ultima_busca = self._extrair_links_de_texto(
                                 str(result)
                             )
@@ -341,11 +373,17 @@ class Modelo:
                                 "content": str(result)
                             })
 
+                            messages.append({
+                                "role": "user",
+                                "content": "Agora abra os links mais relevantes usando browse_page."
+                            })
+
                         elif name == "browse_page":
                             url = str(args.get("url", "")).strip()
                             if not self._url_valida_para_browse(url):
                                 fallback = next(
-                                    (u for u in links_ultima_busca if self._url_valida_para_browse(u)),
+                                    (u for u in links_ultima_busca if self._url_valida_para_browse(
+                                        u)),
                                     None,
                                 )
                                 if fallback:
@@ -361,25 +399,27 @@ class Modelo:
                                     })
                                     continue
 
-                            result = await tool_fn(**args)
+                            result = tool_fn(**args)
                             messages.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call_id,
                                 "content": str(result)
                             })
-                            
-                        elif name == "generate_diagram":
-                            args["request"] = mensagem
-                            result = await tool_fn(**args)
 
+                        elif name == "generate_diagram":
+                            args["request"] = str(args.get("request") or mensagem)
+                            args["model"] = str(self.modelo or "")
+                         
+                            result = tool_fn(**args)
+                            
                             print("[FINAL TOOL RESULT]")
                             print(result)
 
-                            return result  
+                            return result
 
                         else:
 
-                            result = await tool_fn(**args)
+                            result = tool_fn(**args)
 
                             messages.append({
                                 "role": "tool",
