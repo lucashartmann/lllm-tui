@@ -33,6 +33,10 @@ jobs:
             --name "Ollama TUI" `
             --add-data "view/css;view/css" `
             --add-data "skills;skills" `
+            --hidden-import view.chat `
+            --hidden-import view.config `
+            --hidden-import view.models `
+            --hidden-import view.skills `
             --collect-all llama_index `
             --collect-all rich `
             --collect-all textual `

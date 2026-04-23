@@ -6,7 +6,10 @@ from textual.binding import Binding
 from database import shelve
 from model.modelo import Modelo
 from textual.color import Color
-from view import chat, config, models, skills
+from view.chat import ChatScreen
+from view.config import ConfigScreen
+from view.models import ModelsScreen
+from view.skills import SkillsScreen
 from util.comandos import comandos_str
 
 
@@ -42,10 +45,10 @@ class App(App):
     SYSTEM_PROMPT = read_resource("skills", "system_prompt.md")
 
     SCREENS = {
-        "inicio": chat.ChatScreen,
-        "config": config.ConfigScreen,
-        "skills": skills.SkillsScreen,
-        "models": models.ModelsScreen,
+        "inicio": ChatScreen,
+        "config": ConfigScreen,
+        "skills": SkillsScreen,
+        "models": ModelsScreen,
     }
 
     BINDINGS = [
