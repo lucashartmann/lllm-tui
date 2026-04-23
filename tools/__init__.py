@@ -1,4 +1,4 @@
-from tools import arquivo, diagrama, internet, banco, chamar_ai
+from tools import arquivo, diagrama, internet, banco, chamar_ai, cmd
 
 TOOLS_MAP = {
     "web_search": internet.web_search,
@@ -12,9 +12,25 @@ TOOLS_MAP = {
     "salvar_no_banco": banco.salvar_no_banco,
     "pesquisar_no_banco": banco.pesquisar_no_banco,
     "chamar_ai": chamar_ai.chamar_ai,
+    "cmd_tool": cmd.cmd_tool,
+    "powershell_tool": cmd.powershell_tool,
 }
 
 TOOLS_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "cmd_tool",
+            "description": "Executa um comando no terminal e retorna a saída"
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "powershell_tool",
+            "description": "Executa um comando no PowerShell e retorna a saída"
+        }
+    },
     {
       "type": "function",
       "function": {

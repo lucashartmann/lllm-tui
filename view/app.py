@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from textual import events
 from textual.app import App
 from textual.binding import Binding
@@ -6,6 +8,13 @@ from model.modelo import Modelo
 from textual.color import Color
 from view import chat, config, models, skills
 from util.comandos import comandos_str
+
+
+BASE_DIRECTORY = Path(__file__).resolve().parents[1]
+
+
+def read_resource(*parts: str) -> str:
+    return BASE_DIRECTORY.joinpath(*parts).read_text(encoding="utf-8")
 
 class App(App):
 
@@ -21,16 +30,16 @@ class App(App):
     - nome do user: {nome_user}
     Responda usando o idioma da mensagem a seguir:\n
     '''
-    CURRENT_DIRECTORY = "C:/Users/dudua/Music/Projetos/lllm-tui/skills/diagramas/"
+    CURRENT_DIRECTORY = BASE_DIRECTORY / "skills" / "diagramas"
     SKILLS = {
-        "astah_uml_class": open(CURRENT_DIRECTORY + "astah/uml_class.md", "r", encoding="utf-8").read(),
-        "astah_uml_sequence": open(CURRENT_DIRECTORY + "astah/uml_sequence.md", "r", encoding="utf-8").read(),
-        "astah_uml_use_case": open(CURRENT_DIRECTORY + "astah/uml_use_case.md", "r", encoding="utf-8").read(),
-        "brmodelo_conceitual": open(CURRENT_DIRECTORY + "brmodelo/conceitual.md", "r", encoding="utf-8").read(),
-        "brmodelo_logico": open(CURRENT_DIRECTORY + "brmodelo/logico.md", "r", encoding="utf-8").read(),
+        "astah_uml_class": read_resource("skills", "diagramas", "astah", "uml_class.md"),
+        "astah_uml_sequence": read_resource("skills", "diagramas", "astah", "uml_sequence.md"),
+        "astah_uml_use_case": read_resource("skills", "diagramas", "astah", "uml_use_case.md"),
+        "brmodelo_conceitual": read_resource("skills", "diagramas", "brmodelo", "conceitual.md"),
+        "brmodelo_logico": read_resource("skills", "diagramas", "brmodelo", "logico.md"),
     }
 
-    SYSTEM_PROMPT = open("skills/system_prompt.md", "r", encoding="utf-8").read()
+    SYSTEM_PROMPT = read_resource("skills", "system_prompt.md")
 
     SCREENS = {
         "inicio": chat.ChatScreen,

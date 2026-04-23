@@ -28,14 +28,16 @@ jobs:
       - name: Build executable with PyInstaller
         run: |
           pyinstaller --onedir `
-            --collect-all rich `
-            --collect-all textual `
-            --collect-all llama_index `
             --exclude-module nltk `
             --exclude-module scipy `
             --name "Ollama TUI" `
-            --add-data "view/css;." `
+            --add-data "view/css;view/css" `
+            --add-data "skills;skills" `
+            --collect-all llama_index `
+            --collect-all rich `
+            --collect-all textual `
             --additional-hooks-dir "./config/" `
+            --noconfirm `
             main.py
 
       - name: Fazer upload do artefato
