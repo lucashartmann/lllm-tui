@@ -1,4 +1,6 @@
 <p align="center">
+  <a href="https://ollama.com/">
+    <img src="https://img.shields.io/badge/ollama-1.0.0-green?logo=ollama&logoColor=white" />
   <a href="https://www.python.org/">
     <img src="https://img.shields.io/badge/Python-3.12-blue?logo=python&logoColor=white" />
   </a>
