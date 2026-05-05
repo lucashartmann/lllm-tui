@@ -103,7 +103,7 @@ class ChatScreen(Screen):
 
     def _gerar_resposta(self, prompt_inicial) -> str | None:
         resposta = None
-        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.app.config + "\n" + prompt_inicial
+        mensagem = self.app.SYSTEM_PROMPT + "\n" + self.app.config_str + "\n" + prompt_inicial
 
         if self.caminhos:
             arquivos = []
